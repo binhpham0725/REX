@@ -89,8 +89,8 @@
                         🏆 TOP 5 ONLINE RANKING
                     </div>
                     <div class="leaderboard-actions">
-                        <span class="db-status-badge" title="Cơ sở dữ liệu độc lập, sẵn sàng tích hợp Firebase Firestore">
-                            <span class="status-dot"></span> Online SCORE
+                        <span class="db-status-badge" id="dbStatusBadge" title="Cơ sở dữ liệu đám mây Firebase Firestore">
+                            <span class="status-dot"></span> <span id="dbStatusText">🔥 Firebase Cloud</span>
                         </span>
                         <button id="refreshLeaderboardBtn" class="btn btn-sm" title="Làm mới bảng xếp hạng">
                             REFRESH SCORE
@@ -143,6 +143,11 @@
             </div>
         </div>
     </div>
+
+    <!-- Firebase SDK (Compat version cho web Vanilla) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics-compat.js"></script>
 
     <!-- Game Scripts -->
     <script src="js/audio.js"></script>

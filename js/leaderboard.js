@@ -15,12 +15,13 @@
  * 2. Điền config bên dưới và đổi config `USE_FIREBASE = true`.
  */
 const FIREBASE_CONFIG = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyA3vnklDHkGbJlMynjYyeOo6c-cQbfH22A",
+    authDomain: "rexx-3ad24.firebaseapp.com",
+    projectId: "rexx-3ad24",
+    storageBucket: "rexx-3ad24.firebasestorage.app",
+    messagingSenderId: "422387830559",
+    appId: "1:422387830559:web:ab1dce01886063205c6a2a",
+    measurementId: "G-S3NHQH288Y"
 };
 
 // ==========================================
@@ -123,60 +124,129 @@ class LocalStorageDBProvider {
     }
 }
 
-// Lớp Provider cho Firebase (khi người dùng đưa Firebase Config vào)
+// Lớp Provider cho Firebase Firestore (Đồng bộ Online Toàn Cầu)
 class FirebaseDBProvider {
     constructor(config) {
         this.config = config;
         this.db = null;
+        this.analytics = null;
         this.collectionName = 'rex_leaderboard';
+        this.unsubscribe = null;
+        this.isReady = false;
         this.initFirebase();
     }
 
     initFirebase() {
-        if (window.firebase && !firebase.apps.length) {
-            firebase.initializeApp(this.config);
-            this.db = firebase.firestore();
-        } else if (window.firebase) {
-            this.db = firebase.firestore();
+        try {
+            if (typeof window !== 'undefined' && window.firebase) {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(this.config);
+                }
+                this.db = firebase.firestore();
+                if (typeof firebase.analytics === 'function') {
+                    try {
+                        this.analytics = firebase.analytics();
+                    } catch (anErr) {
+                        // Analytics optional
+                    }
+                }
+                this.isReady = true;
+                console.log('🔥 [Firebase] Đã kết nối Firestore Cloud Database!');
+            }
+        } catch (e) {
+            console.error('🔥 [Firebase] Lỗi khởi tạo Firebase:', e);
+            this.isReady = false;
         }
     }
 
     async getTopScores(limitCount = 5) {
         if (!this.db) return [];
-        const snapshot = await this.db.collection(this.collectionName)
-            .orderBy('score', 'desc')
-            .limit(limitCount)
-            .get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        try {
+            const snapshot = await this.db.collection(this.collectionName)
+                .orderBy('score', 'desc')
+                .limit(limitCount)
+                .get();
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (e) {
+            console.warn('🔥 [Firebase] Lỗi getTopScores (hãy kiểm tra Rules của Firestore):', e);
+            return [];
+        }
+    }
+
+    listenTopScores(limitCount = 5, callback, onError) {
+        if (!this.db) return;
+        try {
+            if (this.unsubscribe) this.unsubscribe();
+            this.unsubscribe = this.db.collection(this.collectionName)
+                .orderBy('score', 'desc')
+                .limit(limitCount)
+                .onSnapshot(snapshot => {
+                    const top = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    if (callback) callback(top);
+                }, err => {
+                    console.warn('🔥 [Firebase Realtime] Lỗi lắng nghe dữ liệu (kiểm tra Rules Firestore):', err);
+                    if (onError) onError(err);
+                });
+        } catch (e) {
+            console.warn('🔥 [Firebase] onSnapshot error:', e);
+            if (onError) onError(e);
+        }
     }
 
     async saveScore(playerId, playerName, score) {
         if (!this.db) return false;
-        const ref = this.db.collection(this.collectionName).doc(playerId);
-        const doc = await ref.get();
-        if (doc.exists) {
-            const currentScore = doc.data().score || 0;
-            if (score > currentScore) {
-                await ref.set({ name: playerName, score: score, updatedAt: Date.now() }, { merge: true });
+        try {
+            const ref = this.db.collection(this.collectionName).doc(playerId);
+            const doc = await ref.get();
+            if (doc.exists) {
+                const currentScore = doc.data().score || 0;
+                if (score > currentScore) {
+                    await ref.set({ name: playerName, score: score, updatedAt: Date.now() }, { merge: true });
+                } else {
+                    await ref.set({ name: playerName }, { merge: true });
+                }
             } else {
-                await ref.set({ name: playerName }, { merge: true });
+                await ref.set({ name: playerName, score: score, updatedAt: Date.now() });
             }
-        } else {
-            await ref.set({ name: playerName, score: score, updatedAt: Date.now() });
+            return true;
+        } catch (e) {
+            console.warn('🔥 [Firebase] Lỗi lưu điểm lên Firestore:', e);
+            return false;
         }
-        return true;
     }
 
     async updatePlayerName(playerId, newName) {
         if (!this.db) return false;
-        const ref = this.db.collection(this.collectionName).doc(playerId);
-        await ref.set({ name: newName }, { merge: true });
-        return true;
+        try {
+            const ref = this.db.collection(this.collectionName).doc(playerId);
+            await ref.set({ name: newName }, { merge: true });
+            return true;
+        } catch (e) {
+            console.warn('🔥 [Firebase] Lỗi cập nhật tên trên Firestore:', e);
+            return false;
+        }
     }
 
     async getPlayerRank(playerId) {
-        // Có thể lấy top 100 hoặc query rank
-        return null;
+        if (!this.db) return null;
+        try {
+            const snapshot = await this.db.collection(this.collectionName)
+                .orderBy('score', 'desc')
+                .limit(100)
+                .get();
+            const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const index = docs.findIndex(d => d.id === playerId);
+            if (index >= 0) {
+                return {
+                    rank: index + 1,
+                    record: docs[index],
+                    total: docs.length
+                };
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
     }
 }
 
@@ -309,20 +379,59 @@ class PlayerManager {
 class LeaderboardManager {
     constructor() {
         this.player = new PlayerManager();
-        
-        // Tự động nhận diện: Nếu chạy qua HTTP Server thì dùng ServerDBProvider để chia sẻ điểm giữa mọi trình duyệt
-        if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
-            this.db = new ServerDBProvider();
-        } else {
-            this.db = new LocalStorageDBProvider();
+        this.isFirebase = false;
+
+        // Ưu tiên 1: Firebase Firestore nếu có SDK & Config
+        if (typeof window !== 'undefined' && window.firebase && FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey) {
+            try {
+                this.db = new FirebaseDBProvider(FIREBASE_CONFIG);
+                this.isFirebase = true;
+            } catch (err) {
+                console.warn('🔥 [Firebase] Lỗi khởi tạo, chuyển sang Server cục bộ:', err);
+            }
+        }
+
+        // Ưu tiên 2: Server API nội bộ (nếu chạy qua http/https và không dùng Firebase)
+        if (!this.isFirebase) {
+            if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+                this.db = new ServerDBProvider();
+            } else {
+                this.db = new LocalStorageDBProvider();
+            }
         }
 
         this.initDOMElements();
+        this.updateStatusBadge();
         this.bindEvents();
         this.checkInitialPlayer();
+        this.initDataSync();
         this.refreshLeaderboard();
         this.updateProfileDisplay();
-        this.startAutoSync(2500); // Tự động đồng bộ điểm mới nhất từ server mỗi 2.5 giây
+    }
+
+    initDataSync() {
+        if (this.isFirebase && typeof this.db.listenTopScores === 'function') {
+            // Lắng nghe dữ liệu đám mây theo thời gian thực (Real-time Cloud Sync)
+            this.db.listenTopScores(
+                5,
+                (topPlayers) => {
+                    this.renderTopPlayers(topPlayers);
+                    this.updateUserRankNoticeFromList(topPlayers);
+                },
+                (err) => {
+                    console.warn('🔥 [Firebase] Lỗi quyền truy cập Firestore Rules:', err.message);
+                    if (this.statusText) {
+                        this.statusText.textContent = '⚠️ Check Firebase Rules';
+                        if (this.statusBadge) {
+                            this.statusBadge.title = 'Hãy bật Firestore Database và cấu hình Rules cho phép đọc/ghi trên Firebase Console!';
+                        }
+                    }
+                }
+            );
+        } else {
+            // Đồng bộ định kỳ nếu dùng Server cục bộ
+            this.startAutoSync(2500);
+        }
     }
 
     startAutoSync(intervalMs = 2500) {
@@ -352,6 +461,29 @@ class LeaderboardManager {
         this.profilePlayerName = document.getElementById('profilePlayerName');
         this.profilePlayerBest = document.getElementById('profilePlayerBest');
         this.playerRankNotice = document.getElementById('playerRankNotice');
+        this.statusBadge = document.getElementById('dbStatusBadge');
+        this.statusText = document.getElementById('dbStatusText');
+    }
+
+    updateStatusBadge() {
+        if (this.statusText) {
+            if (this.isFirebase) {
+                this.statusText.textContent = '🔥 Firebase Cloud';
+                if (this.statusBadge) {
+                    this.statusBadge.title = 'Đang đồng bộ trực tuyến toàn cầu qua Firebase Firestore Database';
+                }
+            } else if (this.db instanceof ServerDBProvider) {
+                this.statusText.textContent = '🌐 Local Server';
+                if (this.statusBadge) {
+                    this.statusBadge.title = 'Đang đồng bộ qua Server Node.js cục bộ';
+                }
+            } else {
+                this.statusText.textContent = '💾 Offline DB';
+                if (this.statusBadge) {
+                    this.statusBadge.title = 'Lưu trữ cục bộ trên trình duyệt';
+                }
+            }
+        }
     }
 
     bindEvents() {
@@ -505,6 +637,15 @@ class LeaderboardManager {
         // Hiển thị vị trí người chơi nếu chưa lọt top 5
         const userRankInfo = await this.db.getPlayerRank(this.player.id);
         this.renderUserRankNotice(userRankInfo, topPlayers);
+    }
+
+    async updateUserRankNoticeFromList(top5List) {
+        if (!this.player.hasName() || this.player.highScore <= 0) {
+            this.renderUserRankNotice(null, top5List);
+            return;
+        }
+        const userRankInfo = await this.db.getPlayerRank(this.player.id);
+        this.renderUserRankNotice(userRankInfo, top5List);
     }
 
     renderTopPlayers(topPlayers) {

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>T-Rex Runner - Web Game Khủng Long</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦖</text></svg>">
+</head>
+<body>
+    <header class="header">
+        <h1 class="title">T-REX RUNNERRRRRRRRRRR</h1>
+        <p class="subtitle"></p>
+    </header>
+
+    <main class="game-wrapper">
+        <!-- Bảng điểm & Công cụ -->
+        <div class="score-bar">
+            <div class="controls-bar">
+                <button id="muteBtn" class="btn" title="Bật/Tắt âm thanh (Phím M)">
+                    <span class="btn-text">Mute</span>
+                </button>
+                <button id="pauseBtn" class="btn" title="Tạm dừng/Tiếp tục (Phím P)">
+                    <span class="btn-text">Pause</span>
+                </button>
+            </div>
+            <div class="score-display">
+                <span id="highScore" class="high-score">HI 00000</span>
+                <span id="currentScore" class="current-score">00000</span>
+            </div>
+        </div>
+
+        <!-- Khung Canvas Game -->
+        <div class="canvas-container" id="gameContainer">
+            <canvas id="gameCanvas" width="1000" height="300"></canvas>
+
+            <!-- Hướng dẫn bắt đầu -->
+            <div id="startPrompt" class="start-prompt">
+                SPACE OR CLICK TO START
+            </div>
+
+            <!-- Modal Game Over -->
+            <div id="gameOverModal" class="overlay">
+                <div class="game-over-title">G A M E &nbsp; O V E R</div>
+                <button id="restartBtn" class="btn primary">
+                    PLAY AGAIN (SPACE / ENTER)
+                </button>
+            </div>
+
+            <!-- Modal Paused -->
+            <div id="pauseModal" class="overlay">
+                <div class="game-over-title">PAUSE</div>
+                <button class="btn primary" onclick="window.dinoGame.togglePause()">
+                    CONTINUE
+                </button>
+            </div>
+        </div>
+
+        <!-- Nút điều khiển cảm ứng dành cho màn hình điện thoại/tablet -->
+        <div class="mobile-controls">
+            <button id="btnDuckMobile" class="mobile-btn">
+                ⬇ DUCK
+            </button>
+            <button id="btnJumpMobile" class="mobile-btn">
+                ⬆ JUMP
+            </button>
+        </div>
+
+        <!-- Khu vực Người chơi & Bảng xếp hạng trực tuyến (Database riêng sẵn sàng Firebase) -->
+        <section class="online-leaderboard-section">
+            <!-- Thanh thông tin hồ sơ người chơi -->
+            <div class="player-profile-bar">
+                <div class="profile-info">
+                    <span class="profile-label">PLAYER:</span>
+                    <span id="profilePlayerName" class="profile-name">Loading...</span>
+                    <span class="profile-divider">|</span>
+                    <span class="profile-label">YOUR BEST:</span>
+                    <span id="profilePlayerBest" class="profile-best">00000</span>
+                </div>
+                <button id="editNameBtn" class="btn btn-sm" title="Đổi biệt danh của bạn">
+                    ✏️ <span class="btn-text">Edit name</span>
+                </button>
+            </div>
+
+            <!-- Bảng xếp hạng Top 5 -->
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <div class="leaderboard-title">
+                        🏆 TOP 5 ONLINE RANKING
+                    </div>
+                    <div class="leaderboard-actions">
+                        <span class="db-status-badge" title="Cơ sở dữ liệu độc lập, sẵn sàng tích hợp Firebase Firestore">
+                            <span class="status-dot"></span> Online SCORE
+                        </span>
+                        <button id="refreshLeaderboardBtn" class="btn btn-sm" title="Làm mới bảng xếp hạng">
+                            REFRESH SCORE
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tiêu đề cột -->
+                <div class="leaderboard-columns">
+                    <div class="col-rank">RANK</div>
+                    <div class="col-name">PLAYER</div>
+                    <div class="col-score">SCORE</div>
+                </div>
+
+                <!-- Danh sách 5 người điểm cao nhất -->
+                <div id="leaderboardList" class="leaderboard-list">
+                    <!-- Dữ liệu được nạp tự động qua JavaScript -->
+                </div>
+
+                <!-- Thông báo thứ hạng cá nhân -->
+                <div id="playerRankNotice" class="player-rank-notice"></div>
+            </div>
+
+            <!-- Ghi chú điều khiển tinh gọn -->
+            <div class="quick-controls-hint">
+                <span>🎮 <strong>Phím:</strong> [Space/↑] Nhảy &bull; [↓] Cúi &bull; [P] Dừng &bull; [M] Âm</span>
+                <span class="touch-hint">&bull; <strong>Cảm ứng:</strong> Chạm nửa trên/dưới hoặc nút ảo</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Nhập / Sửa tên người chơi khi vào web hoặc bấm sửa tên -->
+    <div id="playerNameModal" class="player-modal-backdrop">
+        <div class="player-modal-box">
+            <div class="modal-icon">🦖</div>
+            <h2 id="nameModalTitle" class="modal-title">NHẬP TÊN NGƯỜI CHƠI</h2>
+            <p id="nameModalSubtitle" class="modal-subtitle">
+                Nhập tên để lưu điểm kỷ lục trên trình duyệt và ghi danh lên bảng xếp hạng!
+            </p>
+            <div class="modal-input-group">
+                <input type="text" id="playerNameInput" maxlength="15" placeholder="Ví dụ: Khủng Long Đỏ" autocomplete="off" spellcheck="false">
+                <span class="input-char-limit">Tối đa 15 ký tự</span>
+            </div>
+            <div class="modal-actions">
+                <button type="button" id="cancelNameBtn" class="btn" style="display: none;">HỦY</button>
+                <button type="button" id="saveNameBtn" class="btn primary">LƯU & TIẾP TỤC</button>
+            </div>
+            <div class="modal-note">
+                🔒 Tên người chơi và điểm số được lưu trên trình duyệt của bạn (sẵn sàng đẩy lên Firebase).
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Scripts -->
+    <script src="js/audio.js"></script>
+    <script src="js/sprites.js"></script>
+    <script src="js/leaderboard.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

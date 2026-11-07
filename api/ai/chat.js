@@ -1,6 +1,6 @@
 /**
  * API duy nhất kết nối trực tiếp 100% với Ollama
- * Nhận tin nhắn từ Web -> Gọi Ollama -> Trả về câu trả lời thực tế từ Ollama
+ * Nhận tin nhắn từ Web -> Gọi Ollama -> Trả vềEcâu trả lời thực tế từ Ollama
  */
 
 export const config = {
@@ -12,7 +12,7 @@ export const config = {
 const DEFAULT_OLLAMA_URL = process.env.OLLAMA_URL || 'https://e6a0-116-99-255-211.ngrok-free.app';
 
 export default async function handler(req, res) {
-    // CORS headers cho phép mọi thiết bị truy cập
+    // CORS headers cho phép mọi thiết bềEtruy cập
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-ollama-url');
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // Thiết lập Server-Sent Events (SSE) để stream câu trả lời từ Ollama về web
+    // Thiết lập Server-Sent Events (SSE) đềEstream câu trả lời từ Ollama vềEweb
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
 
         const model = payload.model || 'qwen-fast:latest';
         const rawMessages = payload.messages || [];
-        const think = payload.think === true; // mặc định false để trả lời nhanh
+        const think = payload.think === true; // mặc định false đềEtrả lời nhanh
 
         if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
             res.write(`data: ${JSON.stringify({ error: 'Thiếu nội dung tin nhắn' })}\n\n`);
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
         const chatHistory = rawMessages.filter(m => m.role !== 'system').slice(-4);
         const messagesToSend = [systemMsg, ...chatHistory];
 
-        // Lấy địa chỉ Ollama
+        // Lấy địa chềEOllama
         const ollamaBaseUrl = req.headers['x-ollama-url'] || payload.ollamaUrl || DEFAULT_OLLAMA_URL;
 
         // Gửi trực tiếp đến Ollama API
@@ -64,7 +64,7 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': '1' // Bỏ qua trang cảnh báo của ngrok
+                'ngrok-skip-browser-warning': '1' // BềEqua trang cảnh báo của ngrok
             },
             body: JSON.stringify({
                 model: model,
@@ -80,12 +80,12 @@ export default async function handler(req, res) {
 
         if (!ollamaRes.ok) {
             const errText = await ollamaRes.text();
-            res.write(`data: ${JSON.stringify({ error: `Ollama trả về lỗi HTTP ${ollamaRes.status}: ${errText}` })}\n\n`);
+            res.write(`data: ${JSON.stringify({ error: `Ollama trả vềElỗi HTTP ${ollamaRes.status}: ${errText}` })}\n\n`);
             res.write(`data: [DONE]\n\n`);
             return res.end();
         }
 
-        // Pipe trực tiếp từng token từ Ollama về giao diện Web theo thời gian thực
+        // Pipe trực tiếp từng token từ Ollama vềEgiao diện Web theo thời gian thực
         const reader = ollamaRes.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
 
     } catch (err) {
         console.error('[Ollama API Error]', err);
-        res.write(`data: ${JSON.stringify({ error: `Không thể kết nối đến Ollama: ${err.message}. Hãy đảm bảo máy tính đang mở Ollama và Ngrok!` })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: `Không thềEkết nối đến Ollama: ${err.message}. Hãy đảm bảo máy tính đang mềEOllama và Ngrok!` })}\n\n`);
         res.write(`data: [DONE]\n\n`);
         res.end();
     }

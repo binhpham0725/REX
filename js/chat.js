@@ -1,7 +1,7 @@
 /**
  * T-Rex Local AI Chatbot Module
  * Kết nối với Ollama AI đang chạy trực tiếp trên máy tính qua Server API (/api/ai/chat)
- * Hỗ trợ: Real-time Streaming, Thinking Process (collapsible), Model Selection, Markdown styling
+ * HềEtrợ: Real-time Streaming, Thinking Process (collapsible), Model Selection, Markdown styling
  */
 
 (function () {
@@ -10,7 +10,7 @@
         isOpen: false,
         selectedModel: 'qwen-fast:latest',
         availableModels: [],
-        think: false, // MẶC ĐỊNH FALSE ĐỂ TRẢ LỜI NGAY TRONG VÀI GIÂY, KHÔNG SUY NGHĨ NGÂM PHÚT
+        think: false, // MẶC ĐỊNH FALSE ĐềETRẢ LỜI NGAY TRONG VÀI GIÁE, KHÔNG SUY NGHĨ NGÁE PHÚT
         messages: [
             {
                 role: 'system',
@@ -30,26 +30,26 @@
         fetchModels();
     }
 
-    // 0. Xác định địa chỉ API Server thông minh
+    // 0. Xác định địa chềEAPI Server thông minh
     function getApiEndpoint(endpointPath) {
         // Nếu trang web đang chạy trên bất kỳ HTTP/HTTPS host nào (Vercel, Localhost, IP mạng LAN...)
         if (window.location.protocol.startsWith('http')) {
             return endpointPath; // LUÔN DÙNG ĐƯỜNG DẪN TƯƠNG ĐỐI TRÊN CÙNG DOMAIN
         }
-        // Chỉ khi mở bằng file:// cục bộ (double-click index.html offline không qua server)
+        // ChềEkhi mềEbằng file:// cục bềE(double-click index.html offline không qua server)
         return 'http://localhost:8080' + endpointPath;
     }
 
-    // 1. Tạo giao diện HTML cho Nút mở chat và Cửa sổ chat
+    // 1. Tạo giao diện HTML cho Nút mềEchat và Cửa sềEchat
     function renderChatHTML() {
-        // Nút mở chat dạng Floating Action Button (FAB)
+        // Nút mềEchat dạng Floating Action Button (FAB)
         const fabBtn = document.createElement('button');
         fabBtn.id = 'aiChatFab';
         fabBtn.className = 'ai-chat-fab';
-        fabBtn.title = 'Mở khung chat với AI Local (Ollama)';
+        fabBtn.title = 'MềEkhung chat với AI Local (Ollama)';
         fabBtn.innerHTML = `
             <div class="fab-icon-wrapper">
-                <span class="fab-icon">🤖</span>
+                <span class="fab-icon">🤁E/span>
                 <span class="fab-pulse-ring"></span>
             </div>
             <span class="fab-text">Chat với AI</span>
@@ -57,7 +57,7 @@
         `;
         document.body.appendChild(fabBtn);
 
-        // Khung cửa sổ Chat (Chat Window)
+        // Khung cửa sềEChat (Chat Window)
         const chatWindow = document.createElement('div');
         chatWindow.id = 'aiChatWindow';
         chatWindow.className = 'ai-chat-window';
@@ -65,11 +65,11 @@
             <!-- Header -->
             <div class="ai-chat-header">
                 <div class="ai-header-left">
-                    <span class="ai-avatar">🦖</span>
+                    <span class="ai-avatar">🦁E/span>
                     <div class="ai-header-info">
                         <div class="ai-title-row">
                             <span class="ai-name">T-Rex Local AI</span>
-                            <span class="ai-status-indicator online" id="aiStatusIndicator" title="Ollama đang hoạt động">● Online</span>
+                            <span class="ai-status-indicator online" id="aiStatusIndicator" title="Ollama đang hoạt động">◁EOnline</span>
                         </div>
                         <div class="ai-model-selector-wrapper">
                             <span class="model-icon">⚡</span>
@@ -80,21 +80,21 @@
                     </div>
                 </div>
                 <div class="ai-header-actions">
-                    <button id="aiModeToggleBtn" class="ai-mode-toggle-btn fast" title="Chế độ phản hồi: Bấm để chuyển giữa Nhanh (vài giây) hoặc Suy nghĩ sâu">
+                    <button id="aiModeToggleBtn" class="ai-mode-toggle-btn fast" title="Chế đềEphản hồi: Bấm đềEchuyển giữa Nhanh (vài giây) hoặc Suy nghĩ sâu">
                         <span class="mode-icon">⚡</span>
                         <span class="mode-text">Nhanh</span>
                     </button>
-                    <button id="aiSettingsBtn" class="ai-icon-btn" title="Cài đặt kết nối AI (Vercel Cloud / Ngrok Tunnel)">⚙️</button>
-                    <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑️</button>
-                    <button id="aiCloseBtn" class="ai-icon-btn" title="Đóng khung chat">✕</button>
+                    <button id="aiSettingsBtn" class="ai-icon-btn" title="Cài đặt kết nối AI (Vercel Cloud / Ngrok Tunnel)">⚙︁E/button>
+                    <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑�E�E/button>
+                    <button id="aiCloseBtn" class="ai-icon-btn" title="Đóng khung chat">✁E/button>
                 </div>
             </div>
 
             <!-- Panel Cài đặt kết nối Ollama -->
             <div class="ai-settings-panel" id="aiSettingsPanel">
                 <div class="settings-header">
-                    <strong>⚙️ KẾT NỐI OLLAMA TRÊN MÁY</strong>
-                    <button id="aiCloseSettingsBtn" class="close-settings-btn">✕</button>
+                    <strong>⚙︁EKẾT NỐI OLLAMA TRÊN MÁY</strong>
+                    <button id="aiCloseSettingsBtn" class="close-settings-btn">✁E/button>
                 </div>
                 <div class="settings-desc">
                     Đường dẫn API kết nối trực tiếp đến mô hình Ollama trên máy tính của bạn:
@@ -112,16 +112,16 @@
 
             <!-- Messages Container -->
             <div class="ai-chat-body" id="aiChatBody">
-                <!-- Lời chào mở đầu -->
+                <!-- Lời chào mềEđầu -->
                 <div class="ai-msg-bubble ai-msg-welcome">
-                    <div class="msg-avatar">🦖</div>
+                    <div class="msg-avatar">🦁E/div>
                     <div class="msg-content">
                         <p><strong>Xin chào!</strong> Mình là AI chạy trực tiếp trên máy tính của bạn (qua <strong>Ollama Local</strong>).</p>
-                        <p>Bạn có thể hỏi mình mọi thứ: mẹo chơi game Khủng Long đạt điểm cao, lập trình, giải toán hay tâm sự vui vẻ!</p>
+                        <p>Bạn có thềEhỏi mình mọi thứ: mẹo chơi game Khủng Long đạt điểm cao, lập trình, giải toán hay tâm sự vui vẻ!</p>
                         <div class="quick-prompts-wrapper">
-                            <button class="quick-prompt-btn" data-prompt="Làm sao để chơi game Khủng Long đạt điểm kỷ lục trên 1000 điểm?">🎮 Mẹo đạt 1000+ điểm?</button>
-                            <button class="quick-prompt-btn" data-prompt="Kể một câu chuyện cười ngắn vui vẻ">😄 Kể chuyện cười</button>
-                            <button class="quick-prompt-btn" data-prompt="Bạn đang chạy bằng model AI nào trên máy tôi?">💻 Giới thiệu về bạn</button>
+                            <button class="quick-prompt-btn" data-prompt="Làm sao đềEchơi game Khủng Long đạt điểm kỷ lục trên 1000 điểm?">🎮 Mẹo đạt 1000+ điểm?</button>
+                            <button class="quick-prompt-btn" data-prompt="KềEmột câu chuyện cười ngắn vui vẻ">�E KềEchuyện cười</button>
+                            <button class="quick-prompt-btn" data-prompt="Bạn đang chạy bằng model AI nào trên máy tôi?">💻 Giới thiệu vềEbạn</button>
                         </div>
                     </div>
                 </div>
@@ -130,7 +130,7 @@
             <!-- Footer / Input -->
             <div class="ai-chat-footer">
                 <div class="ai-input-wrapper">
-                    <textarea id="aiChatInput" class="ai-chat-input" rows="1" placeholder="Nhắn tin cho AI local (Enter để gửi)..."></textarea>
+                    <textarea id="aiChatInput" class="ai-chat-input" rows="1" placeholder="Nhắn tin cho AI local (Enter đềEgửi)..."></textarea>
                     <button id="aiSendBtn" class="ai-send-btn" title="Gửi tin nhắn (Enter)">
                         <span class="send-icon">➤</span>
                     </button>
@@ -158,7 +158,7 @@
         fab.addEventListener('click', toggleChat);
         closeBtn.addEventListener('click', toggleChat);
 
-        // Bật/Tắt chế độ Nhanh vs Suy nghĩ sâu
+        // Bật/Tắt chế đềENhanh vs Suy nghĩ sâu
         const modeToggleBtn = document.getElementById('aiModeToggleBtn');
         if (modeToggleBtn) {
             modeToggleBtn.addEventListener('click', () => {
@@ -166,11 +166,11 @@
                 if (chatState.think) {
                     modeToggleBtn.className = 'ai-mode-toggle-btn think';
                     modeToggleBtn.innerHTML = '<span class="mode-icon">🧠</span> <span class="mode-text">Suy nghĩ</span>';
-                    appendSystemNotice('🧠 Đã bật chế độ <strong>Suy nghĩ sâu</strong> (phù hợp lập trình, toán học, giải đố phức tạp).');
+                    appendSystemNotice('🧠 Đã bật chế đềE<strong>Suy nghĩ sâu</strong> (phù hợp lập trình, toán học, giải đềEphức tạp).');
                 } else {
                     modeToggleBtn.className = 'ai-mode-toggle-btn fast';
                     modeToggleBtn.innerHTML = '<span class="mode-icon">⚡</span> <span class="mode-text">Nhanh</span>';
-                    appendSystemNotice('⚡ Đã bật chế độ <strong>Trả lời nhanh</strong> (phản hồi trong 3-5 giây, không suy nghĩ lâu).');
+                    appendSystemNotice('⚡ Đã bật chế đềE<strong>Trả lời nhanh</strong> (phản hồi trong 3-5 giây, không suy nghĩ lâu).');
                 }
             });
         }
@@ -227,7 +227,7 @@
             resetTunnelBtn.addEventListener('click', () => {
                 localStorage.removeItem('rex_ollama_tunnel');
                 if (tunnelInput) tunnelInput.value = DEFAULT_NGROK_URL;
-                appendSystemNotice('↺ Đã đặt lại về link Ollama mặc định.');
+                appendSystemNotice('↺ Đã đặt lại vềElink Ollama mặc định.');
                 settingsPanel.classList.remove('open');
                 fetchModels();
             });
@@ -241,7 +241,7 @@
 
         // Xóa lịch sử
         clearBtn.addEventListener('click', () => {
-            if (confirm('Bạn có muốn xóa toàn bộ lịch sử trò chuyện không?')) {
+            if (confirm('Bạn có muốn xóa toàn bềElịch sử trò chuyện không?')) {
                 chatState.messages = [
                     {
                         role: 'system',
@@ -250,7 +250,7 @@
                 ];
                 chatBody.innerHTML = `
                     <div class="ai-msg-bubble ai-msg-welcome">
-                        <div class="msg-avatar">🦖</div>
+                        <div class="msg-avatar">🦁E/div>
                         <div class="msg-content">
                             <p>Cuộc trò chuyện mới đã bắt đầu! Hãy nhập câu hỏi của bạn bên dưới nhé.</p>
                         </div>
@@ -285,7 +285,7 @@
                 }
             }
 
-            // Click vào tiêu đề "Suy nghĩ" để mở rộng / thu gọn
+            // Click vào tiêu đềE"Suy nghĩ" đềEmềErộng / thu gọn
             const thinkingHeader = e.target.closest('.thinking-toggle-header');
             if (thinkingHeader) {
                 const container = thinkingHeader.closest('.thinking-accordion');
@@ -296,7 +296,7 @@
         });
     }
 
-    // 3. Đóng mở cửa sổ Chat
+    // 3. Đóng mềEcửa sềEChat
     function toggleChat() {
         const win = document.getElementById('aiChatWindow');
         const fab = document.getElementById('aiChatFab');
@@ -347,7 +347,7 @@
                 }
 
                 statusIndicator.className = 'ai-status-indicator online';
-                statusIndicator.textContent = data.isVercel ? '● Online (Vercel)' : '● Online (Ollama)';
+                statusIndicator.textContent = data.isVercel ? '◁EOnline (Vercel)' : '◁EOnline (Ollama)';
                 statusBadge.className = 'fab-badge online';
                 statusBadge.title = 'AI đã sẵn sàng trò chuyện!';
             } else {
@@ -363,7 +363,7 @@
         const statusBadge = document.getElementById('aiStatusBadge');
         if (statusIndicator) {
             statusIndicator.className = 'ai-status-indicator offline';
-            statusIndicator.textContent = '○ Offline';
+            statusIndicator.textContent = '◁EOffline';
             statusIndicator.title = msg;
         }
         if (statusBadge) {
@@ -434,7 +434,7 @@
 
             if (!response.ok) {
                 if (response.status === 404) {
-                    throw new Error(`HTTP 404 (Không tìm thấy endpoint API). Vui lòng đảm bảo bạn đang mở web tại địa chỉ http://localhost:8080/ và đã chạy "node server.js"!`);
+                    throw new Error(`HTTP 404 (Không tìm thấy endpoint API). Vui lòng đảm bảo bạn đang mềEweb tại địa chềEhttp://localhost:8080/ và đã chạy "node server.js"!`);
                 }
                 throw new Error(`HTTP error ${response.status}`);
             }
@@ -493,7 +493,7 @@
                             scrollToBottom();
                         }
                     } catch (parseErr) {
-                        // Bỏ qua dòng JSON không hoàn chỉnh
+                        // BềEqua dòng JSON không hoàn chỉnh
                     }
                 }
             }
@@ -513,10 +513,10 @@
             console.error('[Chat Error]', err);
             contentElem.innerHTML = `
                 <div class="ai-error-box">
-                    <p><strong>⚠️ ${err.message}</strong></p>
+                    <p><strong>⚠�E�E${err.message}</strong></p>
                     <p style="margin-top: 6px; font-size: 11.5px; opacity: 0.9;">
                         💡 <strong>Khắc phục:</strong><br>
-                        1. Đảm bảo bạn đang mở game bằng liên kết: <a href="http://localhost:8080/" style="color:#1a73e8;text-decoration:underline;font-weight:bold;">http://localhost:8080/</a><br>
+                        1. Đảm bảo bạn đang mềEgame bằng liên kết: <a href="http://localhost:8080/" style="color:#1a73e8;text-decoration:underline;font-weight:bold;">http://localhost:8080/</a><br>
                         2. Đảm bảo ứng dụng <strong>Ollama</strong> đang chạy trên máy và đã chạy <code>node server.js</code>.
                     </p>
                 </div>
@@ -547,9 +547,9 @@
         bubble.className = 'ai-msg-bubble assistant';
 
         bubble.innerHTML = `
-            <div class="msg-avatar">🦖</div>
+            <div class="msg-avatar">🦁E/div>
             <div class="msg-content-wrapper">
-                <!-- Khối hiển thị Quá trình suy nghĩ (Thinking) giống hệt Ollama -->
+                <!-- Khối hiển thềEQuá trình suy nghĩ (Thinking) giống hệt Ollama -->
                 <div class="thinking-accordion" id="thinkingAccordion">
                     <div class="thinking-toggle-header">
                         <span class="thinking-icon">🧠</span>

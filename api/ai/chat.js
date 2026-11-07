@@ -12,7 +12,17 @@ export const config = {
 };
 
 // URL Ollama mặc định (kết nối trực tiếp tới máy tính của bạn)
-const DEFAULT_OLLAMA_URL = process.env.OLLAMA_URL || 'https://e6a0-116-99-255-211.ngrok-free.app';
+function getDefaultOllamaUrl() {
+    try {
+        const tunnelFile = path.join(process.cwd(), 'data', 'current_tunnel.txt');
+        if (fs.existsSync(tunnelFile)) {
+            const savedUrl = fs.readFileSync(tunnelFile, 'utf8').trim();
+            if (savedUrl && savedUrl.startsWith('https://')) return savedUrl;
+        }
+    } catch (e) {}
+    return process.env.OLLAMA_URL || 'https://7e7f-116-99-255-211.ngrok-free.app';
+}
+const DEFAULT_OLLAMA_URL = getDefaultOllamaUrl();
 
 function normalizeQuestion(str) {
     return String(str || '')

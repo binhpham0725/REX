@@ -24,10 +24,28 @@
     // Khởi tạo các DOM elements khi trang tải xong
     document.addEventListener('DOMContentLoaded', initChat);
 
-    function initChat() {
+    async function initChat() {
         renderChatHTML();
         bindChatEvents();
+        await syncTunnelFromServer();
         fetchModels();
+    }
+
+    // Tự động đồng bộ link Tunnel Ngrok mới nhất từ Backend (chống lỗi khi Ngrok khởi động lại)
+    async function syncTunnelFromServer() {
+        try {
+            const res = await fetch(getApiEndpoint('/api/ai/tunnel'));
+            const data = await res.json();
+            if (data.success && data.url) {
+                const currentStored = localStorage.getItem('rex_ollama_tunnel');
+                // Nếu chưa lưu hoặc đang lưu link cũ bị lỗi thì tự động cập nhật
+                if (!currentStored || currentStored.includes('e6a0-')) {
+                    localStorage.setItem('rex_ollama_tunnel', data.url);
+                    const tunnelInput = document.getElementById('aiTunnelInput');
+                    if (tunnelInput) tunnelInput.value = data.url;
+                }
+            }
+        } catch (e) {}
     }
 
     // 0. Xác định địa chềEAPI Server thông minh
@@ -192,10 +210,16 @@
 
         const geminiKeyInput = document.getElementById('aiGeminiKeyInput');
 
-        const DEFAULT_NGROK_URL = 'https://e6a0-116-99-255-211.ngrok-free.app';
+        const DEFAULT_NGROK_URL = 'https://7e7f-116-99-255-211.ngrok-free.app';
+
+        let storedTunnel = localStorage.getItem('rex_ollama_tunnel');
+        if (storedTunnel && storedTunnel.includes('e6a0-')) {
+            storedTunnel = DEFAULT_NGROK_URL;
+            localStorage.setItem('rex_ollama_tunnel', DEFAULT_NGROK_URL);
+        }
 
         if (tunnelInput) {
-            tunnelInput.value = localStorage.getItem('rex_ollama_tunnel') || DEFAULT_NGROK_URL;
+            tunnelInput.value = storedTunnel || DEFAULT_NGROK_URL;
         }
 
         if (settingsBtn && settingsPanel) {
@@ -417,7 +441,11 @@
 
         try {
             const apiUrl = getApiEndpoint('/api/ai/chat');
-            const tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || 'https://e6a0-116-99-255-211.ngrok-free.app';
+            let tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || 'https://7e7f-116-99-255-211.ngrok-free.app';
+            if (tunnelUrl.includes('e6a0-')) {
+                tunnelUrl = 'https://7e7f-116-99-255-211.ngrok-free.app';
+                localStorage.setItem('rex_ollama_tunnel', tunnelUrl);
+            }
             const headers = { 'Content-Type': 'application/json' };
             if (tunnelUrl) headers['x-ollama-url'] = tunnelUrl;
 

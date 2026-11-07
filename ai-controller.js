@@ -442,25 +442,83 @@ async function printBanner() {
     console.log(`${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}`);
 }
 
+// Tự động đồng bộ URL Ngrok mới vào code & GitHub để Vercel không bao giờ bị lỗi
+async function autoSyncNgrokUrl(newUrl) {
+    if (!newUrl || !newUrl.startsWith('https://')) return;
+
+    try {
+        const tunnelFile = path.join(DATA_DIR, 'current_tunnel.txt');
+        const oldUrl = fs.existsSync(tunnelFile) ? fs.readFileSync(tunnelFile, 'utf8').trim() : '';
+
+        // Luôn ghi lại file current_tunnel.txt
+        fs.writeFileSync(tunnelFile, newUrl, 'utf8');
+
+        if (oldUrl !== newUrl) {
+            console.log(`\n${C.yellow}🔄 Phát hiện đường hầm Ngrok đổi URL mới:${C.reset} ${C.cyan}${newUrl}${C.reset}`);
+            console.log(`   Đang tự động đồng bộ lên GitHub & Vercel để web không bị lỗi...`);
+
+            // 1. Cập nhật api/ai/chat.js và api/ai/tunnel.js
+            const chatApiPath = path.join(__dirname, 'api', 'ai', 'chat.js');
+            if (fs.existsSync(chatApiPath)) {
+                let code = fs.readFileSync(chatApiPath, 'utf8');
+                code = code.replace(/https:\/\/[a-z0-9\-]+\.ngrok-free\.app/g, newUrl);
+                fs.writeFileSync(chatApiPath, code, 'utf8');
+            }
+
+            const tunnelApiPath = path.join(__dirname, 'api', 'ai', 'tunnel.js');
+            if (fs.existsSync(tunnelApiPath)) {
+                let code = fs.readFileSync(tunnelApiPath, 'utf8');
+                code = code.replace(/https:\/\/[a-z0-9\-]+\.ngrok-free\.app/g, newUrl);
+                fs.writeFileSync(tunnelApiPath, code, 'utf8');
+            }
+
+            const clientChatPath = path.join(__dirname, 'js', 'chat.js');
+            if (fs.existsSync(clientChatPath)) {
+                let code = fs.readFileSync(clientChatPath, 'utf8');
+                code = code.replace(/https:\/\/[a-z0-9\-]+\.ngrok-free\.app/g, newUrl);
+                fs.writeFileSync(clientChatPath, code, 'utf8');
+            }
+
+            // 2. Chạy git commit & push ngầm
+            await runCmd('git add data/current_tunnel.txt api/ai/chat.js api/ai/tunnel.js js/chat.js');
+            await runCmd(`git commit -m "chore: auto-sync ngrok tunnel URL: ${newUrl}"`);
+            runCmd('git push origin main');
+            console.log(`   ${C.green}✅ Đã tự động cập nhật và đẩy lên Vercel! Web sẽ nhận diện URL mới trong 20s.${C.reset}`);
+        }
+    } catch (e) {}
+}
+
 // -------------------------------------------------------------
 // [1] KHỞI ĐỘNG AI (Ollama)
 // -------------------------------------------------------------
 async function handleStartAI() {
     console.log(`\n${C.yellow}⏳ Đang kiểm tra và khởi động Ollama AI...${C.reset}`);
     
-    const status = await getOllamaStatus();
+    let status = await getOllamaStatus();
     if (status.online) {
         console.log(`${C.green}✅ Ollama đã đang chạy sẵn tại port ${OLLAMA_PORT}!${C.reset}`);
     } else {
-        exec('start "" ollama app');
+        const appData = process.env.LOCALAPPDATA || '';
+        const ollamaAppPath = path.join(appData, 'Programs', 'Ollama', 'ollama app.exe');
+
+        if (fs.existsSync(ollamaAppPath)) {
+            exec(`start "" "${ollamaAppPath}"`);
+        } else {
+            exec('start /B "" ollama serve');
+        }
+
         process.stdout.write('  Đang khởi động tiến trình Ollama');
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 10; i++) {
             await new Promise(r => setTimeout(r, 800));
             process.stdout.write('.');
-            const check = await getOllamaStatus();
-            if (check.online) {
+            status = await getOllamaStatus();
+            if (status.online) {
                 console.log(`\n${C.green}✅ Khởi động Ollama thành công!${C.reset}`);
                 break;
+            }
+            // Thử khởi động thêm bằng ollama serve nếu app.exe chưa lên
+            if (i === 4 && !status.online) {
+                exec('start /B "" ollama serve');
             }
         }
     }
@@ -478,7 +536,15 @@ async function handleStartAI() {
         await warmUpOllama();
         console.log(`${C.green}Hoàn tất! Model luôn sẵn sàng trong 1 giây.${C.reset}`);
     } else {
-        console.log(`\n${C.red}⚠️ Không thể khởi động Ollama tự động. Bạn vui lòng mở ứng dụng Ollama từ Start Menu!${C.reset}`);
+        console.log(`\n${C.red}⚠️ Chưa thể kết nối tới Ollama. Đang thử kích hoạt qua lệnh "ollama serve"...${C.reset}`);
+        exec('start /B "" ollama serve');
+        await new Promise(r => setTimeout(r, 2000));
+        const retryCheck = await getOllamaStatus();
+        if (retryCheck.online) {
+            console.log(`${C.green}✅ Kích hoạt Ollama thành công qua "ollama serve"!${C.reset}`);
+        } else {
+            console.log(`${C.red}Vui lòng mở ứng dụng Ollama từ Start Menu hoặc gõ "ollama serve" trong CMD!${C.reset}`);
+        }
     }
 }
 
@@ -494,6 +560,7 @@ async function handleStartNgrok() {
         console.log(`🔗 Public URL: ${C.cyan}${C.bright}${currentNgrok.url}${C.reset}`);
         copyToClipboard(currentNgrok.url);
         console.log(`📋 ${C.dim}(Đã tự động sao chép link vào Clipboard)${C.reset}`);
+        await autoSyncNgrokUrl(currentNgrok.url);
         return;
     }
 
@@ -509,6 +576,7 @@ async function handleStartNgrok() {
             console.log(`🔗 Public URL: ${C.cyan}${C.bright}${check.url}${C.reset}`);
             copyToClipboard(check.url);
             console.log(`📋 ${C.dim}(Đã tự động sao chép link vào Clipboard)${C.reset}`);
+            await autoSyncNgrokUrl(check.url);
             return;
         }
     }

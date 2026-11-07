@@ -256,6 +256,22 @@ const server = http.createServer((req, res) => {
     // AI LOCAL (OLLAMA) API ENDPOINTS
     // ==========================================
 
+    // 4.0 GET /api/ai/tunnel - Lấy Public URL Ngrok hiện tại
+    if (pathname === '/api/ai/tunnel' && req.method === 'GET') {
+        let currentUrl = 'https://7e7f-116-99-255-211.ngrok-free.app';
+        try {
+            const tunnelFile = path.join(DATA_DIR, 'current_tunnel.txt');
+            if (fs.existsSync(tunnelFile)) {
+                const u = fs.readFileSync(tunnelFile, 'utf8').trim();
+                if (u && u.startsWith('https://')) currentUrl = u;
+            }
+        } catch (e) {}
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, url: currentUrl }));
+        return;
+    }
+
     // 4. GET /api/ai/models - Lấy danh sách mô hình AI đang chạy trên máy (Ollama)
     if (pathname === '/api/ai/models' && req.method === 'GET') {
         const ollamaReq = http.request('http://localhost:11434/api/tags', { method: 'GET' }, (ollamaRes) => {

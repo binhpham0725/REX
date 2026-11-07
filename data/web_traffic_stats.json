@@ -185,27 +185,77 @@
       "finalized": true
     },
     "airt_3Lmq4KZH4basuTXZZJN2s0OGUal": "2026-11-07T23:36:38+07:00",
-    "airt_3Ln7Mj8yYN0HWlbwjqVabbnEAwH": "2026-11-08T01:58:51+07:00"
+    "airt_3Ln7Mj8yYN0HWlbwjqVabbnEAwH": {
+      "time": "2026-11-08T01:58:51+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "promptTokens": 205,
+      "completionTokens": 180,
+      "totalTokens": 385,
+      "finalized": true
+    },
+    "airt_3Ln7UutKlyS2ILmJF5TGjTIzZYt": "2026-11-08T01:59:56+07:00",
+    "airt_3Ln7UnOGHSedJirq2Wpe0wZC4Rp": "2026-11-08T01:59:55+07:00",
+    "airt_3Ln7cVcFDntLqNnQv1Ieege53ze": {
+      "time": "2026-11-08T02:00:57+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "promptTokens": 81,
+      "completionTokens": 173,
+      "totalTokens": 254,
+      "finalized": true
+    },
+    "airt_3Ln7hFE4dlLGsqNSIfg5oW5ayrE": {
+      "time": "2026-11-08T02:01:34+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "promptTokens": 264,
+      "completionTokens": 173,
+      "totalTokens": 437,
+      "finalized": true
+    },
+    "airt_3Ln7osoQohKwT9QLV3fC3ec1zxw": {
+      "time": "2026-11-08T02:02:35+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "promptTokens": 437,
+      "completionTokens": 384,
+      "totalTokens": 821,
+      "finalized": true
+    },
+    "airt_3Ln7vcPFwuD2BdhWAztjAlDEB8U": {
+      "time": "2026-11-08T02:03:29+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "promptTokens": 649,
+      "completionTokens": 58,
+      "totalTokens": 707,
+      "finalized": true
+    },
+    "airt_3Ln809w2ERUwK0G2TPYA8KH4Ygl": {
+      "time": "2026-11-08T02:04:05+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "promptTokens": 526,
+      "completionTokens": 334,
+      "totalTokens": 860,
+      "finalized": true
+    }
   },
   "websites": {
     "https://rex-nu-ten.vercel.app": {
       "name": "https://rex-nu-ten.vercel.app",
-      "totalRequests": 9,
-      "successRequests": 9,
+      "totalRequests": 14,
+      "successRequests": 14,
       "errorRequests": 0,
-      "promptTokens": 4917,
-      "completionTokens": 1682,
-      "totalTokens": 6599,
+      "promptTokens": 7079,
+      "completionTokens": 2984,
+      "totalTokens": 10063,
       "totalDuration": 138.9664369,
-      "lastActive": "2026-11-08T01:58:51+07:00",
+      "lastActive": "2026-11-08T02:04:05+07:00",
       "endpoints": {
-        "/api/chat": 9
+        "/api/chat": 14
       },
       "clientIps": [
         "100.55.94.109",
         "44.211.144.203",
         "98.87.161.141",
-        "116.99.255.211"
+        "116.99.255.211",
+        "3.83.157.121"
       ]
     },
     "https://rex-k7nyv0g7c-binhpham0725s-projects.vercel.app": {
@@ -340,9 +390,111 @@
       "clientIps": [
         "116.99.255.211"
       ]
+    },
+    "https://rex-3pd2ybqew-binhpham0725s-projects.vercel.app": {
+      "name": "https://rex-3pd2ybqew-binhpham0725s-projects.vercel.app",
+      "totalRequests": 2,
+      "successRequests": 2,
+      "errorRequests": 0,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "totalDuration": 0.0454609,
+      "lastActive": "2026-11-08T01:59:56+07:00",
+      "endpoints": {
+        "/api/tags": 2
+      },
+      "clientIps": [
+        "3.91.55.123",
+        "3.84.132.205"
+      ]
     }
   },
   "recentAudit": [
+    {
+      "id": "airt_3Ln809w2ERUwK0G2TPYA8KH4Ygl",
+      "time": "2026-11-08T02:04:05+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "method": "POST",
+      "uri": "/api/chat",
+      "status": 200,
+      "duration": 36.1944693,
+      "promptTokens": 526,
+      "completionTokens": 334,
+      "totalTokens": 860
+    },
+    {
+      "id": "airt_3Ln7vcPFwuD2BdhWAztjAlDEB8U",
+      "time": "2026-11-08T02:03:29+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "method": "POST",
+      "uri": "/api/chat",
+      "status": 200,
+      "duration": 7.4948197,
+      "promptTokens": 649,
+      "completionTokens": 58,
+      "totalTokens": 707
+    },
+    {
+      "id": "airt_3Ln7osoQohKwT9QLV3fC3ec1zxw",
+      "time": "2026-11-08T02:02:35+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "method": "POST",
+      "uri": "/api/chat",
+      "status": 200,
+      "duration": 39.621323,
+      "promptTokens": 437,
+      "completionTokens": 384,
+      "totalTokens": 821
+    },
+    {
+      "id": "airt_3Ln7hFE4dlLGsqNSIfg5oW5ayrE",
+      "time": "2026-11-08T02:01:34+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "method": "POST",
+      "uri": "/api/chat",
+      "status": 200,
+      "duration": 18.8721557,
+      "promptTokens": 264,
+      "completionTokens": 173,
+      "totalTokens": 437
+    },
+    {
+      "id": "airt_3Ln7cVcFDntLqNnQv1Ieege53ze",
+      "time": "2026-11-08T02:00:57+07:00",
+      "site": "https://rex-nu-ten.vercel.app",
+      "method": "POST",
+      "uri": "/api/chat",
+      "status": 200,
+      "duration": 19.9878866,
+      "promptTokens": 81,
+      "completionTokens": 173,
+      "totalTokens": 254
+    },
+    {
+      "id": "airt_3Ln7UnOGHSedJirq2Wpe0wZC4Rp",
+      "time": "2026-11-08T01:59:55+07:00",
+      "site": "https://rex-3pd2ybqew-binhpham0725s-projects.vercel.app",
+      "method": "GET",
+      "uri": "/api/tags",
+      "status": 200,
+      "duration": 0.0226887,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0
+    },
+    {
+      "id": "airt_3Ln7UutKlyS2ILmJF5TGjTIzZYt",
+      "time": "2026-11-08T01:59:56+07:00",
+      "site": "https://rex-3pd2ybqew-binhpham0725s-projects.vercel.app",
+      "method": "GET",
+      "uri": "/api/tags",
+      "status": 200,
+      "duration": 0.0227722,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0
+    },
     {
       "id": "airt_3Ln7Mj8yYN0HWlbwjqVabbnEAwH",
       "time": "2026-11-08T01:58:51+07:00",
@@ -378,90 +530,6 @@
       "promptTokens": 211,
       "completionTokens": 12,
       "totalTokens": 223
-    },
-    {
-      "id": "airt_3LmqLUysKUp5HmHqFdrDJwLUAeA",
-      "time": "2026-11-07T23:38:54+07:00",
-      "site": "Node.js Backend Client",
-      "method": "POST",
-      "uri": "/api/chat",
-      "status": 200,
-      "duration": 7.6989216,
-      "promptTokens": 213,
-      "completionTokens": 57,
-      "totalTokens": 270
-    },
-    {
-      "id": "airt_3LmqQ1horpKoNwVLbd1LPEAmTqH",
-      "time": "2026-11-07T23:39:30+07:00",
-      "site": "Web Game Vercel (binhpham0725/REX)",
-      "method": "GET",
-      "uri": "/api/tags",
-      "status": 200,
-      "duration": 0.039608,
-      "promptTokens": 0,
-      "completionTokens": 0,
-      "totalTokens": 0
-    },
-    {
-      "id": "airt_3LmqQAXZeZ2cxYytXZ9hOcqe79b",
-      "time": "2026-11-07T23:39:31+07:00",
-      "site": "Web Game Vercel (binhpham0725/REX)",
-      "method": "GET",
-      "uri": "/api/tags",
-      "status": 200,
-      "duration": 0.0210402,
-      "promptTokens": 0,
-      "completionTokens": 0,
-      "totalTokens": 0
-    },
-    {
-      "id": "airt_3Ln11npZbjlw0qwOEM1BpmFF7go",
-      "time": "2026-11-08T01:06:44+07:00",
-      "site": "Web Game Vercel (binhpham0725/REX)",
-      "method": "POST",
-      "uri": "/api/chat",
-      "status": 200,
-      "duration": 26.3414836,
-      "promptTokens": 62,
-      "completionTokens": 72,
-      "totalTokens": 134
-    },
-    {
-      "id": "airt_3Ln178y21XhxHEaanRxvvGsW6xZ",
-      "time": "2026-11-08T01:07:27+07:00",
-      "site": "Web Game Vercel (binhpham0725/REX)",
-      "method": "POST",
-      "uri": "/api/chat",
-      "status": 200,
-      "duration": 8.6072655,
-      "promptTokens": 148,
-      "completionTokens": 64,
-      "totalTokens": 212
-    },
-    {
-      "id": "airt_3Ln1ALiwmvigb9uMsUMsLRmeK7n",
-      "time": "2026-11-08T01:07:52+07:00",
-      "site": "Web Game Vercel (binhpham0725/REX)",
-      "method": "POST",
-      "uri": "/api/chat",
-      "status": 200,
-      "duration": 7.6026981,
-      "promptTokens": 219,
-      "completionTokens": 55,
-      "totalTokens": 274
-    },
-    {
-      "id": "airt_3Ln1JJNeLSA6hgtERP3i11Dgz2i",
-      "time": "2026-11-08T01:09:04+07:00",
-      "site": "Web Game Vercel (binhpham0725/REX)",
-      "method": "POST",
-      "uri": "/api/chat",
-      "status": 200,
-      "duration": 12.049887,
-      "promptTokens": 206,
-      "completionTokens": 92,
-      "totalTokens": 298
     }
   ]
 }

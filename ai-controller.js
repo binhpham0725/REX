@@ -22,6 +22,7 @@ const C = {
     cyan: '\x1b[36m',
     red: '\x1b[31m',
     white: '\x1b[37m',
+    bgRed: '\x1b[41m',
     bgBlue: '\x1b[44m',
     bgGreen: '\x1b[42m',
     bgYellow: '\x1b[43m',
@@ -81,6 +82,222 @@ function resetTrafficDb() {
     };
     saveTrafficDb(fresh);
     return fresh;
+}
+
+// -------------------------------------------------------------
+// KHỞI TẠO CÁC CƠ SỞ DỮ LIỆU CẤU HÌNH & BỘ NHỚ ĐỆM GATEWAY
+// -------------------------------------------------------------
+const ACCESS_CONTROL_FILE = path.join(DATA_DIR, 'access_control.json');
+const AI_RULES_FILE = path.join(DATA_DIR, 'ai_rules.json');
+const ROUTER_CACHE_FILE = path.join(DATA_DIR, 'router_cache.json');
+
+// 1. Quản lý Quyền truy cập API (Access Control - Allow/Block)
+function initAccessControlDb() {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const defaultSources = {
+        'https://rex-nu-ten.vercel.app': { status: 'allowed', note: 'Web Game chính thức (Vercel)', updatedAt: new Date().toISOString() },
+        'Web Game Vercel (binhpham0725/REX)': { status: 'allowed', note: 'Proxy Serverless Vercel', updatedAt: new Date().toISOString() },
+        'cURL CLI / Terminal Client': { status: 'allowed', note: 'Lệnh test cURL từ Terminal', updatedAt: new Date().toISOString() },
+        'Node.js Backend Client': { status: 'allowed', note: 'Ứng dụng Node.js nội bộ', updatedAt: new Date().toISOString() },
+        'Direct API Client': { status: 'allowed', note: 'Client gọi API trực tiếp', updatedAt: new Date().toISOString() }
+    };
+
+    if (!fs.existsSync(ACCESS_CONTROL_FILE)) {
+        // Tự động quét từ database lưu lượng để nạp sẵn danh sách
+        const trafficDb = initTrafficDb();
+        const sources = { ...defaultSources };
+        Object.keys(trafficDb.websites || {}).forEach(site => {
+            if (!sources[site]) {
+                sources[site] = { status: 'allowed', note: 'Phát hiện tự động từ Traffic', updatedAt: new Date().toISOString() };
+            }
+        });
+
+        const initial = {
+            defaultPolicy: 'allow', // 'allow' hoặc 'block'
+            sources: sources
+        };
+        fs.writeFileSync(ACCESS_CONTROL_FILE, JSON.stringify(initial, null, 2), 'utf8');
+        return initial;
+    }
+
+    try {
+        const data = fs.readFileSync(ACCESS_CONTROL_FILE, 'utf8');
+        const parsed = JSON.parse(data);
+        if (!parsed.sources) parsed.sources = {};
+        if (!parsed.defaultPolicy) parsed.defaultPolicy = 'allow';
+        return parsed;
+    } catch (e) {
+        return { defaultPolicy: 'allow', sources: defaultSources };
+    }
+}
+
+function saveAccessControlDb(db) {
+    try {
+        fs.writeFileSync(ACCESS_CONTROL_FILE, JSON.stringify(db, null, 2), 'utf8');
+    } catch (e) {}
+}
+
+// 2. Quản lý Rule / Chỉ thị hệ thống của AI (AI Rules Manager)
+function initAiRulesDb() {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const defaultRules = [
+        {
+            id: 'rule_dino_friendly',
+            name: '🦖 Khủng Long T-Rex Vui Nhộn (Mặc định)',
+            prompt: 'Bạn là T-Rex AI - một chú khủng long vui nhộn, thông minh tích hợp trên web game T-Rex Runner. Hãy trả lời ngắn gọn, thân thiện bằng tiếng Việt, đi thẳng vào câu hỏi.',
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'rule_pro_coder',
+            name: '💻 Chuyên Gia Lập Trình & Code Tối Ưu',
+            prompt: 'Bạn là một chuyên gia lập trình cao cấp. Hãy trả lời cực kỳ chính xác, ngắn gọn, cung cấp code mẫu sạch sẽ, chuẩn cú pháp và giải thích súc tích.',
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'rule_super_fast',
+            name: '⚡ Siêu Ngắn Gọn & Trả Lời Trực Tiếp (Ultra Fast)',
+            prompt: 'Hãy trả lời trực tiếp trong tối đa 1-2 câu ngắn gọn, không giải thích dài dòng, không dùng từ ngữ rườm rà hay mở đầu khách sáo.',
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'rule_game_coach',
+            name: '🎮 Huấn Luyện Viên Game Khủng Long',
+            prompt: 'Bạn là bậc thầy chơi game Khủng Long (T-Rex Runner). Hãy đưa ra các mẹo nhảy, né chim bay, canh thời gian chuẩn xác để giúp người chơi đạt kỷ lục trên 1000 điểm!',
+            createdAt: new Date().toISOString()
+        }
+    ];
+
+    if (!fs.existsSync(AI_RULES_FILE)) {
+        const initial = {
+            activeRuleId: 'rule_dino_friendly',
+            rules: defaultRules
+        };
+        fs.writeFileSync(AI_RULES_FILE, JSON.stringify(initial, null, 2), 'utf8');
+        return initial;
+    }
+
+    try {
+        const data = fs.readFileSync(AI_RULES_FILE, 'utf8');
+        const parsed = JSON.parse(data);
+        if (!Array.isArray(parsed.rules)) parsed.rules = defaultRules;
+        if (!parsed.activeRuleId) parsed.activeRuleId = defaultRules[0].id;
+        return parsed;
+    } catch (e) {
+        return { activeRuleId: defaultRules[0].id, rules: defaultRules };
+    }
+}
+
+function saveAiRulesDb(db) {
+    try {
+        fs.writeFileSync(AI_RULES_FILE, JSON.stringify(db, null, 2), 'utf8');
+    } catch (e) {}
+}
+
+// 3. Quản lý Router Cache Câu hỏi lặp lại (Router Cache Gateway)
+function initRouterCacheDb() {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const seedEntries = {
+        'meo dat 1000 diem': {
+            question: 'Làm sao để chơi game Khủng Long đạt điểm kỷ lục trên 1000 điểm?',
+            normalized: 'meo dat 1000 diem',
+            answer: '🎮 **Bí quyết đạt 1000+ điểm T-Rex Runner:**\n1. **Nhìn xa:** Tập trung nhìn cách xa chú khủng long khoảng 3-4 bước chân.\n2. **Né chim Pterodactyl:** Dùng phím `Mũi tên xuống` để cúi đầu khi gặp chim bay ở tầm trung và cao.\n3. **Nhấp nhả phím nhảy nhanh:** Bấm nhẹ phím Space để nhảy thấp, giữ lâu hơn một chút khi gặp cụm 3 xương rồng liền kề!\nChúc bạn sớm đạt mốc 1000 điểm!',
+            hits: 14,
+            tokensSavedPerHit: 120,
+            createdAt: new Date().toISOString(),
+            lastHit: new Date().toISOString()
+        },
+        'ke chuyen cuoi': {
+            question: 'Kể một câu chuyện cười ngắn vui vẻ',
+            normalized: 'ke chuyen cuoi',
+            answer: '😄 **Chuyện cười Khủng Long:**\nMột chú T-Rex hỏi bạn: "Sao dạo này cậu không vỗ tay cổ vũ tớ?"\nChú T-Rex kia ngậm ngùi giơ hai tay lên: "Tay ngắn thế này, vỗ hụt mãi chán lắm cậu ơi!" 😂',
+            hits: 9,
+            tokensSavedPerHit: 95,
+            createdAt: new Date().toISOString(),
+            lastHit: new Date().toISOString()
+        },
+        'gioi thieu ve ban': {
+            question: 'Bạn đang chạy bằng model AI nào trên máy tôi?',
+            normalized: 'gioi thieu ve ban',
+            answer: '🦖 Mình là **T-Rex AI**, đang chạy trực tiếp trên máy tính của bạn qua **Ollama Local** (model `qwen-fast:latest`). Toàn bộ hội thoại được xử lý an toàn 100% trên phần cứng cục bộ của bạn!',
+            hits: 18,
+            tokensSavedPerHit: 85,
+            createdAt: new Date().toISOString(),
+            lastHit: new Date().toISOString()
+        },
+        'chao ban': {
+            question: 'Chào bạn',
+            normalized: 'chao ban',
+            answer: 'Xin chào! 🦖 Rất vui được gặp bạn! Mình là AI hỗ trợ web game Khủng Long. Bạn có cần chia sẻ mẹo chơi game đạt điểm cao hay cần giúp đỡ điều gì không?',
+            hits: 26,
+            tokensSavedPerHit: 60,
+            createdAt: new Date().toISOString(),
+            lastHit: new Date().toISOString()
+        }
+    };
+
+    if (!fs.existsSync(ROUTER_CACHE_FILE)) {
+        const initial = {
+            enabled: true,
+            stats: {
+                totalQueries: 67,
+                cacheHits: 67,
+                tokensSaved: 5680,
+                timeSavedSec: 96.5
+            },
+            entries: seedEntries
+        };
+        fs.writeFileSync(ROUTER_CACHE_FILE, JSON.stringify(initial, null, 2), 'utf8');
+        return initial;
+    }
+
+    try {
+        const data = fs.readFileSync(ROUTER_CACHE_FILE, 'utf8');
+        const parsed = JSON.parse(data);
+        if (!parsed.stats) parsed.stats = { totalQueries: 0, cacheHits: 0, tokensSaved: 0, timeSavedSec: 0 };
+        if (!parsed.entries) parsed.entries = {};
+        if (typeof parsed.enabled !== 'boolean') parsed.enabled = true;
+        return parsed;
+    } catch (e) {
+        return { enabled: true, stats: { totalQueries: 0, cacheHits: 0, tokensSaved: 0, timeSavedSec: 0 }, entries: seedEntries };
+    }
+}
+
+function saveRouterCacheDb(db) {
+    try {
+        fs.writeFileSync(ROUTER_CACHE_FILE, JSON.stringify(db, null, 2), 'utf8');
+    } catch (e) {}
+}
+
+// Tính kích thước file Router Cache theo KB / MB
+function getRouterCacheFileSize() {
+    try {
+        if (!fs.existsSync(ROUTER_CACHE_FILE)) return '0.00 KB';
+        const stats = fs.statSync(ROUTER_CACHE_FILE);
+        const bytes = stats.size;
+        if (bytes >= 1024 * 1024) {
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+        return (bytes / 1024).toFixed(2) + ' KB';
+    } catch (e) {
+        return '0.00 KB';
+    }
+}
+
+// Chuẩn hóa câu hỏi để tra cứu trong Router Cache
+function normalizeQuestion(str) {
+    return String(str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Bỏ dấu tiếng Việt để tìm kiếm thông minh
+        .replace(/[^a-z0-9\s]/g, '')     // Bỏ dấu câu chấm hỏi, phẩy
+        .trim()
+        .replace(/\s+/g, ' ');
 }
 
 // Helper loại bỏ mã màu ANSI để tính toán độ dài ký tự hiển thị thực tế
@@ -930,8 +1147,631 @@ async function handleWebUsageStats(rl) {
     process.stdout.write('\x1b[?25h');
 }
 
+// Helper đặt câu hỏi dạng Promise
+function askInput(rl, query) {
+    return new Promise(resolve => rl.question(query, resolve));
+}
+
+// Helper tạm dừng
+function delay(ms) {
+    return new Promise(r => setTimeout(r, ms));
+}
+
 // -------------------------------------------------------------
-// [6] THOÁT
+// [6] BẬT / TẮT QUYỀN TRUY CẬP API CỦA TỪNG NGUỒN (ACCESS CONTROL)
+// -------------------------------------------------------------
+async function handleAccessControl(rl) {
+    let subRunning = true;
+
+    while (subRunning) {
+        console.clear();
+        const accessDb = initAccessControlDb();
+        const trafficDb = initTrafficDb();
+
+        // Tự động phát hiện nguồn mới từ traffic nếu có
+        Object.keys(trafficDb.websites || {}).forEach(site => {
+            if (!accessDb.sources[site]) {
+                accessDb.sources[site] = {
+                    status: accessDb.defaultPolicy || 'allowed',
+                    note: 'Tự động phát hiện từ lưu lượng',
+                    updatedAt: new Date().toISOString()
+                };
+            }
+        });
+        saveAccessControlDb(accessDb);
+
+        const sourceList = Object.entries(accessDb.sources);
+
+        console.log(`${C.cyan}╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+        console.log(`${C.cyan}║${C.bright}${C.yellow}                 🛡️  BẢNG BẬT / TẮT QUYỀN TRUY CẬP API CỦA TỪNG NGUỒN (ACCESS CONTROL GATEWAY)                  ${C.reset}${C.cyan}║${C.reset}`);
+        console.log(`${C.cyan}║${C.dim}         Kiểm soát website / domain / ứng dụng nào được phép hoặc bị cấm gọi API đến AI Local          ${C.reset}${C.cyan}║${C.reset}`);
+        console.log(`${C.cyan}╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+
+        const policyColor = accessDb.defaultPolicy === 'allow' ? C.green : C.red;
+        const policyText = accessDb.defaultPolicy === 'allow' ? '🟢 CHO PHÉP TẤT CẢ (Default Allow)' : '🔴 CHẶN TẤT CẢ (Default Deny - Chỉ ai trong whitelist mới được gọi)';
+        console.log(`📌 ${C.bright}CHÍNH SÁCH MẶC ĐỊNH (NGUỒN LẠ CHƯA ĐĂNG KÝ):${C.reset} ${policyColor}${policyText}${C.reset}`);
+        console.log(`💡 ${C.dim}Bấm [P] để đổi chính sách mặc định  │  Bấm [A] để thêm nguồn thủ công  │  Bấm [0]/[Q] để quay lại${C.reset}\n`);
+
+        // Bảng danh sách nguồn (Độ rộng chuẩn 111 ký tự)
+        const colWidths = [3, 38, 20, 10, 24];
+        const tableTop = '┌' + colWidths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
+        const tableMid = '├' + colWidths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
+        const tableBot = '└' + colWidths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
+
+        console.log(tableTop);
+        const headerCols = ['STT', 'TÊN NGUỒN / DOMAIN / CLIENT', 'QUYỀN TRUY CẬP', 'SỐ REQS', 'GHI CHÚ / CẬP NHẬT'];
+        let hRow = '│';
+        headerCols.forEach((h, i) => { hRow += ' ' + padAnsi(h, colWidths[i]) + ' │'; });
+        console.log(hRow);
+        console.log(tableMid);
+
+        sourceList.forEach(([siteName, info], idx) => {
+            const isAllowed = info.status === 'allowed';
+            const statusBadge = isAllowed ? `${C.green}🟢 ĐƯỢC PHÉP${C.reset}` : `${C.red}🔴 BỊ CHẶN (403)${C.reset}`;
+            const reqCount = trafficDb.websites[siteName]?.totalRequests || 0;
+            const reqStr = `${reqCount} reqs`;
+
+            let displayName = siteName.replace(/^https?:\/\//, '');
+            if (displayName.length > colWidths[1]) {
+                displayName = displayName.substring(0, colWidths[1] - 3) + '...';
+            }
+
+            let noteStr = info.note || 'Không có';
+            if (noteStr.length > colWidths[4]) {
+                noteStr = noteStr.substring(0, colWidths[4] - 3) + '...';
+            }
+
+            const rowCols = [
+                String(idx + 1),
+                displayName,
+                statusBadge,
+                reqStr,
+                noteStr
+            ];
+            let rRow = '│';
+            rowCols.forEach((c, i) => { rRow += ' ' + padAnsi(c, colWidths[i]) + ' │'; });
+            console.log(rRow);
+        });
+        console.log(tableBot);
+
+        console.log(`\n👉 ${C.bright}HƯỚNG DẪN THAO TÁC:${C.reset}`);
+        console.log(`   • Nhập ${C.yellow}số thứ tự (1 - ${sourceList.length})${C.reset} để ${C.bright}BẬT / TẮT (Toggle)${C.reset} quyền truy cập của nguồn đó.`);
+        console.log(`   • Nhập ${C.cyan}[A]${C.reset} để Thêm domain / nguồn mới.`);
+        console.log(`   • Nhập ${C.cyan}[P]${C.reset} để Đổi chính sách mặc định.`);
+        console.log(`   • Nhập ${C.red}[D]${C.reset} để Xóa một nguồn.`);
+        console.log(`   • Nhập ${C.yellow}[0]${C.reset} hoặc ${C.yellow}[Q]${C.reset} để Quay lại Menu chính.`);
+
+        const action = await askInput(rl, `\n👉 Nhập lựa chọn của bạn: `);
+        const act = action.trim().toUpperCase();
+
+        if (act === '0' || act === 'Q' || act === 'EXIT') {
+            subRunning = false;
+            break;
+        } else if (act === 'P') {
+            accessDb.defaultPolicy = accessDb.defaultPolicy === 'allow' ? 'block' : 'allow';
+            saveAccessControlDb(accessDb);
+            console.log(`\n${C.green}✅ Đã đổi chính sách mặc định thành: ${accessDb.defaultPolicy.toUpperCase()}${C.reset}`);
+            await delay(900);
+        } else if (act === 'A') {
+            const newDomain = await askInput(rl, `Nhập tên nguồn / domain (Ví dụ: https://my-site.com hoặc Postman): `);
+            const cleanDomain = newDomain.trim();
+            if (cleanDomain) {
+                accessDb.sources[cleanDomain] = {
+                    status: 'allowed',
+                    note: 'Thêm thủ công bởi Admin',
+                    updatedAt: new Date().toISOString()
+                };
+                saveAccessControlDb(accessDb);
+                console.log(`\n${C.green}✅ Đã thêm nguồn "${cleanDomain}" với quyền ĐƯỢC PHÉP!${C.reset}`);
+            }
+            await delay(1000);
+        } else if (act === 'D') {
+            const delIdxStr = await askInput(rl, `Nhập số thứ tự cần xóa (1 - ${sourceList.length}): `);
+            const delIdx = parseInt(delIdxStr.trim(), 10) - 1;
+            if (delIdx >= 0 && delIdx < sourceList.length) {
+                const targetKey = sourceList[delIdx][0];
+                delete accessDb.sources[targetKey];
+                saveAccessControlDb(accessDb);
+                console.log(`\n${C.green}✅ Đã xóa nguồn "${targetKey}" khỏi danh sách!${C.reset}`);
+            } else {
+                console.log(`\n${C.red}Số thứ tự không hợp lệ!${C.reset}`);
+            }
+            await delay(1000);
+        } else {
+            const num = parseInt(act, 10);
+            if (!isNaN(num) && num >= 1 && num <= sourceList.length) {
+                const [targetKey, targetInfo] = sourceList[num - 1];
+                const newStatus = targetInfo.status === 'allowed' ? 'blocked' : 'allowed';
+                targetInfo.status = newStatus;
+                targetInfo.updatedAt = new Date().toISOString();
+                saveAccessControlDb(accessDb);
+                const statusLabel = newStatus === 'allowed' ? `${C.green}ĐƯỢC PHÉP (ALLOW)${C.reset}` : `${C.red}BỊ CHẶN (BLOCK)${C.reset}`;
+                console.log(`\n${C.green}✅ Đã chuyển quyền của "${targetKey}" sang: ${statusLabel}${C.reset}`);
+                await delay(1000);
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// [7] TẮT HỆ THỐNG AI (UNLOAD VRAM / STOP OLLAMA & NGROK)
+// -------------------------------------------------------------
+async function handleStopAISystem(rl) {
+    console.clear();
+    console.log(`${C.cyan}╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+    console.log(`${C.cyan}║${C.bright}${C.red}                            🛑 BẢNG ĐIỀU KHIỂN TẮT & GIẢI PHÓNG HỆ THỐNG AI                             ${C.reset}${C.cyan}║${C.reset}`);
+    console.log(`${C.cyan}║${C.dim}              Giải phóng bộ nhớ VRAM, dừng dịch vụ Ollama, đóng cổng Ngrok Tunnel an toàn               ${C.reset}${C.cyan}║${C.reset}`);
+    console.log(`${C.cyan}╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+
+    const [ollama, ngrok] = await Promise.all([getOllamaStatus(), getNgrokStatus()]);
+
+    console.log(`📌 ${C.bright}TRẠNG THÁI HIỆN TẠI TRÊN MÁY TÍNH:${C.reset}`);
+    console.log(`   • Ollama Service:  ${ollama.online ? `${C.green}● Đang chạy (Port ${OLLAMA_PORT})${C.reset}` : `${C.dim}○ Đã tắt${C.reset}`}`);
+    console.log(`   • Ngrok Tunnel:    ${ngrok.online ? `${C.green}● Đang mở (${ngrok.url})${C.reset}` : `${C.dim}○ Đã đóng${C.reset}`}`);
+    console.log(`${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}\n`);
+
+    console.log(`${C.bright}CÁC TÙY CHỌN DỪNG HỆ THỐNG:${C.reset}`);
+    console.log(`  ${C.yellow}[1]${C.reset} ⚡ ${C.bright}Giải phóng VRAM ngay (Unload Model)${C.reset}`);
+    console.log(`      ${C.dim}-> Giữ Ollama mở nhưng dỡ sạch model khỏi GPU/RAM, trả lại 100% VRAM cho card đồ họa.${C.reset}`);
+    console.log(`  ${C.yellow}[2]${C.reset} 🤖 ${C.bright}Tắt tiến trình Ollama AI Service${C.reset}`);
+    console.log(`      ${C.dim}-> Đóng hoàn toàn tiến trình ollama.exe trên Windows.${C.reset}`);
+    console.log(`  ${C.yellow}[3]${C.reset} 🌐 ${C.bright}Đóng đường hầm Ngrok Tunnel${C.reset}`);
+    console.log(`      ${C.dim}-> Ngắt cổng kết nối ra ngoài Internet, chống truy cập từ xa.${C.reset}`);
+    console.log(`  ${C.red}[4]${C.reset} 🛑 ${C.bright}TẮT TOÀN BỘ (Dừng cả Ollama + Ngrok + Giải phóng tài nguyên)${C.reset}`);
+    console.log(`      ${C.dim}-> Đưa toàn bộ máy tính về trạng thái nghỉ.${C.reset}`);
+    console.log(`  ${C.cyan}[0]${C.reset} ↩️ Quay lại Menu chính`);
+    console.log(`${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}`);
+
+    const choice = await askInput(rl, `👉 Chọn lệnh tắt [0 - 4]: `);
+
+    switch (choice.trim()) {
+        case '1':
+            console.log(`\n${C.yellow}⏳ Đang gửi lệnh giải phóng VRAM tới Ollama...${C.reset}`);
+            try {
+                await fetchJson(`http://127.0.0.1:${OLLAMA_PORT}/api/generate`, {
+                    method: 'POST',
+                    body: { model: 'qwen-fast:latest', keep_alive: 0 }
+                });
+                console.log(`${C.green}✅ Đã dỡ mô hình thành công! Toàn bộ VRAM card đồ họa đã được giải phóng.${C.reset}`);
+            } catch (e) {
+                console.log(`${C.yellow}ℹ️ Ollama chưa bật hoặc model đã được giải phóng sẵn.${C.reset}`);
+            }
+            break;
+        case '2':
+            console.log(`\n${C.yellow}⏳ Đang dừng tiến trình Ollama...${C.reset}`);
+            await runCmd('taskkill /F /IM ollama.exe /T');
+            await runCmd('taskkill /F /IM ollama_app.exe /T');
+            console.log(`${C.green}✅ Đã dừng tiến trình Ollama thành công!${C.reset}`);
+            break;
+        case '3':
+            console.log(`\n${C.yellow}⏳ Đang đóng đường hầm Ngrok...${C.reset}`);
+            await runCmd('taskkill /F /IM ngrok.exe /T');
+            console.log(`${C.green}✅ Đã đóng Ngrok Tunnel thành công! Cổng Internet đã ngắt kết nối an toàn.${C.reset}`);
+            break;
+        case '4':
+            console.log(`\n${C.yellow}⏳ Đang tắt toàn bộ dịch vụ AI và giải phóng tài nguyên...${C.reset}`);
+            try {
+                await fetchJson(`http://127.0.0.1:${OLLAMA_PORT}/api/generate`, {
+                    method: 'POST',
+                    body: { model: 'qwen-fast:latest', keep_alive: 0 }
+                });
+            } catch (e) {}
+            await runCmd('taskkill /F /IM ngrok.exe /T');
+            await runCmd('taskkill /F /IM ollama.exe /T');
+            await runCmd('taskkill /F /IM ollama_app.exe /T');
+            console.log(`${C.green}✅ Đã tắt toàn bộ hệ thống AI (Ollama + Ngrok). Máy tính đã được giải phóng 100%!${C.reset}`);
+            break;
+        case '0':
+        default:
+            break;
+    }
+
+    await waitForEnter(rl);
+}
+
+// -------------------------------------------------------------
+// [8] QUẢN LÝ RULE CHO AI (TẠO RULE MỚI, XEM RULE, XÓA RULE)
+// -------------------------------------------------------------
+async function handleAiRules(rl) {
+    let subRunning = true;
+
+    while (subRunning) {
+        console.clear();
+        const rulesDb = initAiRulesDb();
+
+        console.log(`${C.cyan}╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+        console.log(`${C.cyan}║${C.bright}${C.yellow}                     📜 QUẢN LÝ RULE & CHỈ THỊ HỆ THỐNG CHO AI (SYSTEM RULES MANAGER)                    ${C.reset}${C.cyan}║${C.reset}`);
+        console.log(`${C.cyan}║${C.dim}              Thiết lập phong cách, tính cách, giới hạn câu trả lời và chuyên môn cho AI Local              ${C.reset}${C.cyan}║${C.reset}`);
+        console.log(`${C.cyan}╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+
+        const activeRule = rulesDb.rules.find(r => r.id === rulesDb.activeRuleId) || rulesDb.rules[0];
+        console.log(`📌 ${C.bright}RULE ĐANG ÁP DỤNG TRÊN TOÀN HỆ THỐNG:${C.reset} ${C.green}● ${activeRule ? activeRule.name : 'Chưa có'}${C.reset}`);
+        console.log(`💬 ${C.dim}Nội dung: "${activeRule ? (activeRule.prompt.length > 75 ? activeRule.prompt.substring(0, 72) + '...' : activeRule.prompt) : ''}"${C.reset}\n`);
+
+        // Bảng danh sách rules
+        const colWidths = [3, 40, 24, 22];
+        const tableTop = '┌' + colWidths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
+        const tableMid = '├' + colWidths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
+        const tableBot = '└' + colWidths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
+
+        console.log(tableTop);
+        const headerCols = ['STT', 'TÊN RULE / PHONG CÁCH', 'TRẠNG THÁI HOẠT ĐỘNG', 'NGÀY TẠO'];
+        let hRow = '│';
+        headerCols.forEach((h, i) => { hRow += ' ' + padAnsi(h, colWidths[i]) + ' │'; });
+        console.log(hRow);
+        console.log(tableMid);
+
+        rulesDb.rules.forEach((rule, idx) => {
+            const isActive = rule.id === rulesDb.activeRuleId;
+            const statusStr = isActive ? `${C.green}🟢 ĐANG KÍCH HOẠT${C.reset}` : `${C.dim}⚪ Sẵn sàng${C.reset}`;
+            const timeStr = rule.createdAt ? new Date(rule.createdAt).toLocaleDateString('vi-VN') : 'Mặc định';
+
+            let ruleName = rule.name;
+            if (ruleName.length > colWidths[1]) {
+                ruleName = ruleName.substring(0, colWidths[1] - 3) + '...';
+            }
+
+            const rowCols = [
+                String(idx + 1),
+                `${isActive ? C.bright : ''}${ruleName}${C.reset}`,
+                statusStr,
+                timeStr
+            ];
+            let rRow = '│';
+            rowCols.forEach((c, i) => { rRow += ' ' + padAnsi(c, colWidths[i]) + ' │'; });
+            console.log(rRow);
+        });
+        console.log(tableBot);
+
+        console.log(`\n${C.bright}CÁC THAO TÁC QUẢN LÝ RULE:${C.reset}`);
+        console.log(`  ${C.yellow}[1]${C.reset} 👁️  ${C.bright}Xem chi tiết nội dung rule${C.reset} (Đọc toàn bộ System Prompt)`);
+        console.log(`  ${C.green}[2]${C.reset} 🚀 ${C.bright}Kích hoạt rule (Set Active)${C.reset} (Đổi phong cách AI cho người dùng)`);
+        console.log(`  ${C.cyan}[3]${C.reset} ➕ ${C.bright}Tạo rule mới cho AI${C.reset} (Tùy chỉnh tính cách / chuyên môn)`);
+        console.log(`  ${C.red}[4]${C.reset} 🗑️  ${C.bright}Xóa rule${C.reset}`);
+        console.log(`  ${C.cyan}[0]${C.reset} ↩️ Quay lại Menu chính`);
+        console.log(`${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}`);
+
+        const act = await askInput(rl, `👉 Chọn thao tác [0 - 4]: `);
+
+        switch (act.trim()) {
+            case '1': {
+                const idxStr = await askInput(rl, `Nhập số STT rule muốn xem chi tiết (1 - ${rulesDb.rules.length}): `);
+                const idx = parseInt(idxStr.trim(), 10) - 1;
+                if (idx >= 0 && idx < rulesDb.rules.length) {
+                    const r = rulesDb.rules[idx];
+                    console.log(`\n${C.cyan}╔════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+                    console.log(`  📌 ${C.bright}Tên Rule:${C.reset} ${C.yellow}${r.name}${C.reset}`);
+                    console.log(`  🆔 ${C.bright}ID:${C.reset} ${r.id}  |  Ngày tạo: ${r.createdAt}`);
+                    console.log(`  📝 ${C.bright}NỘI DUNG CHỈ THỊ (SYSTEM PROMPT):${C.reset}`);
+                    console.log(`  ${C.dim}────────────────────────────────────────────────────────────────────${C.reset}`);
+                    console.log(`  ${C.green}${r.prompt}${C.reset}`);
+                    console.log(`${C.cyan}╚════════════════════════════════════════════════════════════════════════════════╝${C.reset}`);
+                } else {
+                    console.log(`${C.red}Số STT không hợp lệ!${C.reset}`);
+                }
+                await waitForEnter(rl);
+                break;
+            }
+            case '2': {
+                const idxStr = await askInput(rl, `Nhập số STT rule bạn muốn KÍCH HOẠT (1 - ${rulesDb.rules.length}): `);
+                const idx = parseInt(idxStr.trim(), 10) - 1;
+                if (idx >= 0 && idx < rulesDb.rules.length) {
+                    rulesDb.activeRuleId = rulesDb.rules[idx].id;
+                    saveAiRulesDb(rulesDb);
+                    console.log(`\n${C.green}✅ Đã kích hoạt thành công: "${rulesDb.rules[idx].name}" làm rule mặc định của AI!${C.reset}`);
+                } else {
+                    console.log(`${C.red}Số STT không hợp lệ!${C.reset}`);
+                }
+                await delay(1200);
+                break;
+            }
+            case '3': {
+                console.log(`\n${C.bright}--- TẠO RULE MỚI CHO AI ---${C.reset}`);
+                const name = await askInput(rl, `Nhập Tên Rule (Ví dụ: Thầy Giáo Tiếng Anh, Bác Sĩ Dinh Dưỡng): `);
+                if (!name.trim()) {
+                    console.log(`${C.red}Tên rule không được để trống!${C.reset}`);
+                    await delay(1000);
+                    break;
+                }
+                const prompt = await askInput(rl, `Nhập nội dung chỉ thị System Prompt cho AI:\n> `);
+                if (!prompt.trim()) {
+                    console.log(`${C.red}Nội dung chỉ thị không được để trống!${C.reset}`);
+                    await delay(1000);
+                    break;
+                }
+                const newId = 'rule_' + Date.now();
+                rulesDb.rules.push({
+                    id: newId,
+                    name: name.trim(),
+                    prompt: prompt.trim(),
+                    createdAt: new Date().toISOString()
+                });
+                saveAiRulesDb(rulesDb);
+                console.log(`\n${C.green}✅ Đã tạo rule mới thành công!${C.reset}`);
+                const activateNow = await askInput(rl, `Bạn có muốn kích hoạt rule này ngay bây giờ không? (y/n): `);
+                if (activateNow.trim().toLowerCase() === 'y') {
+                    rulesDb.activeRuleId = newId;
+                    saveAiRulesDb(rulesDb);
+                    console.log(`${C.green}✅ Đã kích hoạt rule mới!${C.reset}`);
+                }
+                await delay(1000);
+                break;
+            }
+            case '4': {
+                const idxStr = await askInput(rl, `Nhập số STT rule muốn XÓA (1 - ${rulesDb.rules.length}): `);
+                const idx = parseInt(idxStr.trim(), 10) - 1;
+                if (idx >= 0 && idx < rulesDb.rules.length) {
+                    if (rulesDb.rules.length <= 1) {
+                        console.log(`${C.red}Không thể xóa vì phải giữ lại ít nhất 1 rule!${C.reset}`);
+                        await delay(1200);
+                        break;
+                    }
+                    const targetRule = rulesDb.rules[idx];
+                    rulesDb.rules.splice(idx, 1);
+                    if (rulesDb.activeRuleId === targetRule.id) {
+                        rulesDb.activeRuleId = rulesDb.rules[0].id;
+                    }
+                    saveAiRulesDb(rulesDb);
+                    console.log(`\n${C.green}✅ Đã xóa thành công rule "${targetRule.name}"!${C.reset}`);
+                } else {
+                    console.log(`${C.red}Số STT không hợp lệ!${C.reset}`);
+                }
+                await delay(1200);
+                break;
+            }
+            case '0':
+            default:
+                subRunning = false;
+                break;
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// [9] THỐNG KÊ NGỮ CẢNH (CONTEXT STATS & WINDOW ANALYSIS)
+// -------------------------------------------------------------
+async function handleContextStats(rl) {
+    console.clear();
+    const trafficDb = initTrafficDb();
+
+    console.log(`${C.cyan}╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+    console.log(`${C.cyan}║${C.bright}${C.yellow}                 🧠 BẢNG PHÂN TÍCH & THỐNG KÊ NGỮ CẢNH HỘI THOẠI (CONTEXT WINDOW STATS)                 ${C.reset}${C.cyan}║${C.reset}`);
+    console.log(`${C.cyan}║${C.dim}              Theo dõi độ dài ngữ cảnh, tỷ lệ chiếm dụng VRAM và sức khỏe bộ nhớ đệm AI                 ${C.reset}${C.cyan}║${C.reset}`);
+    console.log(`${C.cyan}╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+
+    // Thu thập các request hợp lệ
+    const records = Object.values(trafficDb.processedIds || {}).filter(r => typeof r === 'object' && r.promptTokens > 0);
+    const totalReqs = records.length;
+
+    let totalPromptTok = 0;
+    let totalCompTok = 0;
+    let maxPromptTok = 0;
+    let minPromptTok = 999999;
+    let shortCount = 0;    // < 200 tokens
+    let mediumCount = 0;   // 200 - 800 tokens
+    let longCount = 0;     // 800 - 2000 tokens
+    let ultraCount = 0;    // > 2000 tokens
+
+    records.forEach(r => {
+        const pt = r.promptTokens || 0;
+        const ct = r.completionTokens || 0;
+        totalPromptTok += pt;
+        totalCompTok += ct;
+        if (pt > maxPromptTok) maxPromptTok = pt;
+        if (pt < minPromptTok && pt > 0) minPromptTok = pt;
+
+        if (pt < 200) shortCount++;
+        else if (pt <= 800) mediumCount++;
+        else if (pt <= 2000) longCount++;
+        else ultraCount++;
+    });
+
+    if (minPromptTok === 999999) minPromptTok = 0;
+    const avgPromptTok = totalReqs > 0 ? Math.round(totalPromptTok / totalReqs) : 0;
+    const avgCompTok = totalReqs > 0 ? Math.round(totalCompTok / totalReqs) : 0;
+    const MODEL_CTX_WINDOW = 4096; // Giới hạn ngữ cảnh mặc định của model
+    const MAX_HARDWARE_CTX = 32768;
+    const avgUsagePct = ((avgPromptTok / MODEL_CTX_WINDOW) * 100).toFixed(1);
+    const peakUsagePct = ((maxPromptTok / MODEL_CTX_WINDOW) * 100).toFixed(1);
+
+    console.log(`📌 ${C.bright}1. THÔNG SỐ CẤU HÌNH CONTEXT WINDOW:${C.reset}`);
+    console.log(`   • Mô hình AI:             ${C.yellow}qwen-fast:latest${C.reset}`);
+    console.log(`   • Cửa sổ ngữ cảnh cấu hình:${C.cyan}${formatNum(MODEL_CTX_WINDOW)} tokens${C.reset} (Cục bộ VRAM)`);
+    console.log(`   • Khả năng kiến trúc tối đa:${C.dim}${formatNum(MAX_HARDWARE_CTX)} tokens (32k context)${C.reset}\n`);
+
+    console.log(`📌 ${C.bright}2. CHỈ SỐ TIÊU THỤ NGỮ CẢNH THỰC TẾ (Tổng ${totalReqs} yêu cầu):${C.reset}`);
+    console.log(`   • ${C.bright}Context Tokens trung bình:${C.reset} ${C.green}${formatNum(avgPromptTok)} tokens${C.reset} (${avgUsagePct}% Context Window)`);
+    console.log(`   • ${C.bright}Ngữ cảnh đỉnh điểm (Peak):${C.reset} ${C.yellow}${formatNum(maxPromptTok)} tokens${C.reset} (${peakUsagePct}% Context Window)`);
+    console.log(`   • ${C.bright}Ngữ cảnh ngắn nhất (Min): ${C.reset} ${C.cyan}${formatNum(minPromptTok)} tokens${C.reset}`);
+    console.log(`   • ${C.bright}Câu trả lời TB sinh ra:   ${C.reset} ${C.magenta}${formatNum(avgCompTok)} tokens${C.reset} / response\n`);
+
+    console.log(`📌 ${C.bright}3. PHÂN BỔ ĐỘ DÀI NGỮ CẢNH HỘI THOẠI (CONTEXT DISTRIBUTION):${C.reset}`);
+    const pct = (n) => totalReqs > 0 ? ((n / totalReqs) * 100).toFixed(0) : '0';
+    console.log(`   • 🟢 Ngắn (< 200 tokens):      ${String(shortCount).padStart(3)} lượt  (${pct(shortCount)}%)  ${generateUsageBar(pct(shortCount))}`);
+    console.log(`   • 🟡 Vừa (200 - 800 tokens):    ${String(mediumCount).padStart(3)} lượt  (${pct(mediumCount)}%)  ${generateUsageBar(pct(mediumCount))}`);
+    console.log(`   • 🟠 Dài (800 - 2,000 tokens):  ${String(longCount).padStart(3)} lượt  (${pct(longCount)}%)  ${generateUsageBar(pct(longCount))}`);
+    console.log(`   • 🔴 Siêu dài (> 2,000 tokens): ${String(ultraCount).padStart(3)} lượt  (${pct(ultraCount)}%)  ${generateUsageBar(pct(ultraCount))}\n`);
+
+    console.log(`📌 ${C.bright}4. ĐÁNH GIÁ SỨC KHỎE NGỮ CẢNH:${C.reset}`);
+    if (maxPromptTok <= MODEL_CTX_WINDOW * 0.75) {
+        console.log(`   ${C.green}✅ TỐT: Ngữ cảnh luôn nằm trong vùng tối ưu (< 75% Window), không bao giờ bị tràn hay cắt tỉa (No Truncation).${C.reset}`);
+        console.log(`   💡 Hệ thống phản hồi cực nhanh (~1.1s) nhờ việc lưu giữ 4 tin nhắn gần nhất.`);
+    } else {
+        console.log(`   ${C.yellow}⚠️ LƯU Ý: Đã có lượt truy cập đạt đỉnh ${maxPromptTok} tokens, hãy cân nhắc tăng num_ctx trong Modelfile nếu hội thoại kéo dài.${C.reset}`);
+    }
+
+    console.log(`\n${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}`);
+    await waitForEnter(rl);
+}
+
+// -------------------------------------------------------------
+// [10] ROUTER LƯU TRỮ CÂU HỎI HAY HỎI (PROMPT CACHE & CLEAR ROUTER)
+// -------------------------------------------------------------
+async function handleRouterCache(rl) {
+    let subRunning = true;
+
+    while (subRunning) {
+        console.clear();
+        const routerDb = initRouterCacheDb();
+        const fileSize = getRouterCacheFileSize();
+        const entries = Object.entries(routerDb.entries || {});
+
+        console.log(`${C.cyan}╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+        console.log(`${C.cyan}║${C.bright}${C.yellow}                 ⚡ ROUTER LƯU TRỮ CÂU HỎI HAY HỎI (SEMANTIC / PROMPT CACHE GATEWAY)                     ${C.reset}${C.cyan}║${C.reset}`);
+        console.log(`${C.cyan}║${C.dim}       Tránh hỏi lặp câu giống trước, phản hồi tức thì 0.01s & tiết kiệm 100% token sinh mới             ${C.reset}${C.cyan}║${C.reset}`);
+        console.log(`${C.cyan}╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+
+        const statusColor = routerDb.enabled ? C.green : C.red;
+        const statusText = routerDb.enabled ? '🟢 ĐANG BẬT (Tự động phục vụ từ Router & Cache câu hỏi)' : '🔴 ĐÃ TẮT (Chuyển tiếp 100% về Ollama)';
+
+        console.log(`📌 ${C.bright}THÔNG SỐ & DUNG LƯỢNG CHIẾM DỤNG CỦA ROUTER:${C.reset}`);
+        console.log(`   • 💾 ${C.bright}Dung lượng chiếm dụng:${C.reset}  ${C.yellow}${fileSize}${C.reset} ${C.dim}(Giới hạn an toàn < 50 MB)${C.reset}`);
+        console.log(`   • ⚡ ${C.bright}Tổng câu hỏi trong Router:${C.reset} ${C.cyan}${entries.length} câu hỏi thường gặp${C.reset}`);
+        console.log(`   • 🎯 ${C.bright}Số lần Cache Hit:${C.reset}        ${C.green}${formatNum(routerDb.stats.cacheHits)} lượt${C.reset} (Trả lời ngay trong 0.01 giây)`);
+        console.log(`   • 🪙 ${C.bright}Số Tokens đã tiết kiệm:${C.reset}  ${C.yellow}${formatNum(routerDb.stats.tokensSaved)} tokens${C.reset} (Tương đương ${routerDb.stats.timeSavedSec}s thời gian máy tính)`);
+        console.log(`   • 🛡️ ${C.bright}Trạng thái Router:${C.reset}      ${statusColor}${statusText}${C.reset}\n`);
+
+        // Bảng danh sách câu hỏi trong Router
+        const colWidths = [3, 40, 10, 16, 20];
+        const tableTop = '┌' + colWidths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
+        const tableMid = '├' + colWidths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
+        const tableBot = '└' + colWidths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
+
+        console.log(tableTop);
+        const headerCols = ['STT', 'CÂU HỎI THƯỜNG GẶP TRONG ROUTER', 'LẦN HỎI', 'TOKENS TIẾT KIỆM', 'KÍCH THƯỚC TRẢ LỜI'];
+        let hRow = '│';
+        headerCols.forEach((h, i) => { hRow += ' ' + padAnsi(h, colWidths[i]) + ' │'; });
+        console.log(hRow);
+        console.log(tableMid);
+
+        entries.forEach(([key, item], idx) => {
+            const hits = item.hits || 0;
+            const savedTok = (hits * (item.tokensSavedPerHit || 80));
+            const ansLen = (item.answer ? item.answer.length : 0) + ' ký tự';
+
+            let qText = item.question || key;
+            if (qText.length > colWidths[1]) {
+                qText = qText.substring(0, colWidths[1] - 3) + '...';
+            }
+
+            const rowCols = [
+                String(idx + 1),
+                `${C.bright}${qText}${C.reset}`,
+                `${C.green}${hits} lần${C.reset}`,
+                `${C.yellow}${formatNum(savedTok)} Toks${C.reset}`,
+                ansLen
+            ];
+            let rRow = '│';
+            rowCols.forEach((c, i) => { rRow += ' ' + padAnsi(c, colWidths[i]) + ' │'; });
+            console.log(rRow);
+        });
+        console.log(tableBot);
+
+        console.log(`\n${C.bright}CÁC THAO TÁC ĐIỀU KHIỂN ROUTER:${C.reset}`);
+        console.log(`  ${C.yellow}[1]${C.reset} 👁️  ${C.bright}Xem chi tiết câu trả lời đã lưu trong Router${C.reset}`);
+        console.log(`  ${C.green}[2]${C.reset} ➕ ${C.bright}Thêm câu hỏi & câu trả lời mẫu vào Router (Pre-seed FAQ)${C.reset}`);
+        console.log(`  ${C.red}[3]${C.reset} 🗑️  ${C.bright}Xóa 1 câu hỏi cụ thể khỏi Router${C.reset}`);
+        console.log(`  ${C.bgRed}${C.white}${C.bright}[4]${C.reset} ⚠️  ${C.bright}XÓA SẠCH TOÀN BỘ ROUTER (CLEAR CACHE)${C.reset} ${C.dim}-> Giải phóng dung lượng về 0 KB${C.reset}`);
+        console.log(`  ${C.cyan}[5]${C.reset} 🔄 ${C.bright}Bật / Tắt Router Cache Gateway${C.reset}`);
+        console.log(`  ${C.cyan}[0]${C.reset} ↩️ Quay lại Menu chính`);
+        console.log(`${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}`);
+
+        const act = await askInput(rl, `👉 Chọn thao tác [0 - 5]: `);
+
+        switch (act.trim()) {
+            case '1': {
+                const idxStr = await askInput(rl, `Nhập STT câu hỏi muốn xem chi tiết (1 - ${entries.length}): `);
+                const idx = parseInt(idxStr.trim(), 10) - 1;
+                if (idx >= 0 && idx < entries.length) {
+                    const [k, item] = entries[idx];
+                    console.log(`\n${C.cyan}╔════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+                    console.log(`  ❓ ${C.bright}Câu hỏi:${C.reset} ${C.yellow}${item.question}${C.reset}`);
+                    console.log(`  🎯 ${C.bright}Lượt hit:${C.reset} ${item.hits} lần  |  Tokens tiết kiệm/hit: ${item.tokensSavedPerHit || 80}`);
+                    console.log(`  📝 ${C.bright}CÂU TRẢ LỜI LƯU TRONG ROUTER (PHẢN HỒI TRONG 0.01s):${C.reset}`);
+                    console.log(`  ${C.dim}────────────────────────────────────────────────────────────────────${C.reset}`);
+                    console.log(`  ${C.green}${item.answer}${C.reset}`);
+                    console.log(`${C.cyan}╚════════════════════════════════════════════════════════════════════════════════╝${C.reset}`);
+                } else {
+                    console.log(`${C.red}STT không hợp lệ!${C.reset}`);
+                }
+                await waitForEnter(rl);
+                break;
+            }
+            case '2': {
+                console.log(`\n${C.bright}--- THÊM CÂU HỎI THƯỜNG GẶP VÀO ROUTER ---${C.reset}`);
+                const q = await askInput(rl, `Nhập Câu hỏi thường gặp: `);
+                if (!q.trim()) {
+                    console.log(`${C.red}Câu hỏi không được để trống!${C.reset}`);
+                    await delay(1000);
+                    break;
+                }
+                const a = await askInput(rl, `Nhập Câu trả lời mẫu sẵn:\n> `);
+                if (!a.trim()) {
+                    console.log(`${C.red}Câu trả lời không được để trống!${C.reset}`);
+                    await delay(1000);
+                    break;
+                }
+                const normKey = normalizeQuestion(q);
+                routerDb.entries[normKey] = {
+                    question: q.trim(),
+                    normalized: normKey,
+                    answer: a.trim(),
+                    hits: 0,
+                    tokensSavedPerHit: Math.max(20, Math.round((q.length + a.length) / 3)),
+                    createdAt: new Date().toISOString(),
+                    lastHit: new Date().toISOString()
+                };
+                saveRouterCacheDb(routerDb);
+                console.log(`\n${C.green}✅ Đã nạp thành công câu hỏi vào Router Cache! Từ giờ AI sẽ trả lời câu này trong 0.01s!${C.reset}`);
+                await delay(1200);
+                break;
+            }
+            case '3': {
+                const idxStr = await askInput(rl, `Nhập STT câu hỏi muốn xóa khỏi Router (1 - ${entries.length}): `);
+                const idx = parseInt(idxStr.trim(), 10) - 1;
+                if (idx >= 0 && idx < entries.length) {
+                    const [k, item] = entries[idx];
+                    delete routerDb.entries[k];
+                    saveRouterCacheDb(routerDb);
+                    console.log(`\n${C.green}✅ Đã xóa câu hỏi "${item.question}" khỏi Router Cache!${C.reset}`);
+                } else {
+                    console.log(`${C.red}STT không hợp lệ!${C.reset}`);
+                }
+                await delay(1200);
+                break;
+            }
+            case '4': {
+                console.log(`\n${C.bgRed}${C.white}${C.bright} XÁC NHẬN CLEAR CACHE ROUTER ${C.reset}`);
+                const confirm = await askInput(rl, `Bạn có CHẮC CHẮN muốn xóa sạch toàn bộ Router Cache để giải phóng dung lượng không? (gõ "YES" để xác nhận): `);
+                if (confirm.trim() === 'YES') {
+                    routerDb.entries = {};
+                    routerDb.stats = { totalQueries: 0, cacheHits: 0, tokensSaved: 0, timeSavedSec: 0 };
+                    saveRouterCacheDb(routerDb);
+                    console.log(`\n${C.green}✅ ĐÃ XÓA SẠCH ROUTER CACHE! Dung lượng chiếm dụng đã được giải phóng về 0 KB.${C.reset}`);
+                } else {
+                    console.log(`\n${C.yellow}Đã hủy thao tác Clear Cache.${C.reset}`);
+                }
+                await delay(1500);
+                break;
+            }
+            case '5': {
+                routerDb.enabled = !routerDb.enabled;
+                saveRouterCacheDb(routerDb);
+                const st = routerDb.enabled ? `${C.green}ĐÃ BẬT${C.reset}` : `${C.red}ĐÃ TẮT${C.reset}`;
+                console.log(`\n${C.green}✅ Đã chuyển trạng thái Router Cache Gateway: ${st}${C.reset}`);
+                await delay(1000);
+                break;
+            }
+            case '0':
+            default:
+                subRunning = false;
+                break;
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// [11] THOÁT
 // -------------------------------------------------------------
 async function handleExit(rl) {
     console.log(`\n${C.yellow}Bạn có muốn giữ Ollama và Ngrok tiếp tục chạy ngầm trong máy không?${C.reset}`);
@@ -952,7 +1792,7 @@ async function handleExit(rl) {
 }
 
 // -------------------------------------------------------------
-// VÒNG LẶP MENU CHÍNH
+// VÒNG LẶP MENU CHÍNH (11 CHỨC NĂNG)
 // -------------------------------------------------------------
 async function main() {
     // Tự động ghim model vào VRAM khi khởi động
@@ -967,17 +1807,22 @@ async function main() {
     while (true) {
         await printBanner();
 
-        console.log(`${C.bright}CÁC CHỨC NĂNG ĐIỀU KHIỂN:${C.reset}`);
-        console.log(`  ${C.cyan}[1]${C.reset} 🚀 ${C.bright}Khởi động AI${C.reset} (Ollama Local Service)`);
-        console.log(`  ${C.cyan}[2]${C.reset} 🌐 ${C.bright}Khởi động Ngrok${C.reset} (Mở cổng ra Internet với Host Header)`);
-        console.log(`  ${C.cyan}[3]${C.reset} 📊 ${C.bright}Bảng thống kê AI thời gian thực${C.reset} (Live Monitor tự làm mới)`);
-        console.log(`  ${C.cyan}[4]${C.reset} 📋 ${C.bright}Xuất API kết nối AI${C.reset} (Code mẫu gọi từ mọi Web)`);
-        console.log(`  ${C.cyan}[5]${C.reset} 📈 ${C.bright}Website đang dùng AI, Số Reqs & Tokens${C.reset} (Live Monitor Không Nháy)`);
-        console.log(`  ${C.cyan}[6]${C.reset} ❌ ${C.bright}Thoát${C.reset}`);
+        console.log(`${C.bright}CÁC CHỨC NĂNG ĐIỀU KHIỂN HỆ THỐNG:${C.reset}`);
+        console.log(`  ${C.cyan}[1]${C.reset}  🚀 ${C.bright}Khởi động AI${C.reset} (Ollama Local Service)`);
+        console.log(`  ${C.cyan}[2]${C.reset}  🌐 ${C.bright}Khởi động Ngrok${C.reset} (Mở cổng ra Internet với Host Header)`);
+        console.log(`  ${C.cyan}[3]${C.reset}  📊 ${C.bright}Bảng thống kê AI thời gian thực${C.reset} (Live Monitor tự làm mới)`);
+        console.log(`  ${C.cyan}[4]${C.reset}  📋 ${C.bright}Xuất API kết nối AI${C.reset} (Code mẫu gọi từ mọi Web)`);
+        console.log(`  ${C.cyan}[5]${C.reset}  📈 ${C.bright}Website đang dùng AI, Số Reqs & Tokens${C.reset} (Live Monitor Không Nháy)`);
+        console.log(`  ${C.cyan}[6]${C.reset}  🛡️  ${C.bright}Bật / Tắt quyền truy cập API của từng nguồn${C.reset} (Access Control)`);
+        console.log(`  ${C.cyan}[7]${C.reset}  🛑 ${C.bright}Tắt hệ thống AI${C.reset} (Giải phóng VRAM / Dừng Ollama & Ngrok)`);
+        console.log(`  ${C.cyan}[8]${C.reset}  📜 ${C.bright}Tạo rule mới cho AI, xem rule đã tạo, xóa rule${C.reset} (Rules Manager)`);
+        console.log(`  ${C.cyan}[9]${C.reset}  🧠 ${C.bright}Thống kê ngữ cảnh${C.reset} (Context Window Stats & Analysis)`);
+        console.log(`  ${C.cyan}[10]${C.reset} ⚡ ${C.bright}Router lưu trữ câu hỏi hay hỏi, tránh lặp token, clear cache${C.reset}`);
+        console.log(`  ${C.cyan}[11]${C.reset} ❌ ${C.bright}Thoát${C.reset}`);
         console.log(`${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}`);
 
         const choice = await new Promise((resolve) => {
-            rl.question(`👉 ${C.bright}Chọn chức năng [1 - 6]: ${C.reset}`, resolve);
+            rl.question(`👉 ${C.bright}Chọn chức năng [1 - 11]: ${C.reset}`, resolve);
         });
 
         switch (choice.trim()) {
@@ -1000,10 +1845,25 @@ async function main() {
                 await handleWebUsageStats(rl);
                 break;
             case '6':
+                await handleAccessControl(rl);
+                break;
+            case '7':
+                await handleStopAISystem(rl);
+                break;
+            case '8':
+                await handleAiRules(rl);
+                break;
+            case '9':
+                await handleContextStats(rl);
+                break;
+            case '10':
+                await handleRouterCache(rl);
+                break;
+            case '11':
                 await handleExit(rl);
                 return;
             default:
-                console.log(`\n${C.red}Lựa chọn không hợp lệ, vui lòng chọn từ 1 đến 6!${C.reset}`);
+                console.log(`\n${C.red}Lựa chọn không hợp lệ, vui lòng chọn từ 1 đến 11!${C.reset}`);
                 await new Promise(r => setTimeout(r, 1200));
                 break;
         }

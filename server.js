@@ -62,6 +62,73 @@ const MIME_TYPES = {
     '.mp3': 'audio/mpeg'
 };
 
+// Đường dẫn file cấu hình từ AI Controller
+const ACCESS_CONTROL_FILE = path.join(DATA_DIR, 'access_control.json');
+const AI_RULES_FILE = path.join(DATA_DIR, 'ai_rules.json');
+const ROUTER_CACHE_FILE = path.join(DATA_DIR, 'router_cache.json');
+
+function normalizeQuestion(str) {
+    return String(str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function getAccessStatus(clientSite) {
+    try {
+        if (!fs.existsSync(ACCESS_CONTROL_FILE)) return 'allowed';
+        const data = JSON.parse(fs.readFileSync(ACCESS_CONTROL_FILE, 'utf8'));
+        const info = data.sources?.[clientSite];
+        if (info && info.status) return info.status;
+        return data.defaultPolicy || 'allowed';
+    } catch (e) {
+        return 'allowed';
+    }
+}
+
+function getActiveSystemPrompt() {
+    try {
+        if (!fs.existsSync(AI_RULES_FILE)) return null;
+        const data = JSON.parse(fs.readFileSync(AI_RULES_FILE, 'utf8'));
+        const rule = data.rules?.find(r => r.id === data.activeRuleId);
+        return rule ? rule.prompt : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function lookupRouterCache(question) {
+    try {
+        if (!fs.existsSync(ROUTER_CACHE_FILE)) return null;
+        const data = JSON.parse(fs.readFileSync(ROUTER_CACHE_FILE, 'utf8'));
+        if (data.enabled === false) return null;
+        const normKey = normalizeQuestion(question);
+        let matched = data.entries?.[normKey];
+        if (!matched) {
+            const keys = Object.keys(data.entries || {});
+            for (const k of keys) {
+                if (normKey.length >= 4 && (normKey.includes(k) || k.includes(normKey))) {
+                    matched = data.entries[k];
+                    break;
+                }
+            }
+        }
+        if (matched) {
+            matched.hits = (matched.hits || 0) + 1;
+            matched.lastHit = new Date().toISOString();
+            if (!data.stats) data.stats = {};
+            data.stats.cacheHits = (data.stats.cacheHits || 0) + 1;
+            data.stats.tokensSaved = (data.stats.tokensSaved || 0) + (matched.tokensSavedPerHit || 80);
+            fs.writeFileSync(ROUTER_CACHE_FILE, JSON.stringify(data, null, 2), 'utf8');
+            return matched;
+        }
+    } catch (e) {}
+    return null;
+}
+
 const server = http.createServer((req, res) => {
     // CORS headers cho phép mọi client truy cập (localhost, 127.0.0.1, mạng LAN)
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -241,11 +308,60 @@ const server = http.createServer((req, res) => {
                     return;
                 }
 
-                // Tối ưu ngữ cảnh hội thoại: Giữ system prompt + 4 tin nhắn gần nhất để AI chạy siêu nhanh
-                const systemMsg = rawMessages.find(m => m.role === 'system') || {
-                    role: 'system',
-                    content: 'Bạn là T-Rex AI - một chú khủng long vui nhộn, thông minh tích hợp trên web game T-Rex Runner. Hãy trả lời ngắn gọn, thân thiện bằng tiếng Việt, đi thẳng vào câu hỏi.'
-                };
+                // 1. KIỂM TRA QUYỀN TRUY CẬP (ACCESS CONTROL - CHỨC NĂNG 6)
+                let clientWebsite = req.headers['x-client-origin'] || req.headers['origin'] || '';
+                if (!clientWebsite && req.headers['referer']) {
+                    try {
+                        const u = new URL(req.headers['referer']);
+                        clientWebsite = `${u.protocol}//${u.host}`;
+                    } catch (e) { clientWebsite = req.headers['referer']; }
+                }
+                if (!clientWebsite) clientWebsite = 'Direct API Client';
+
+                const accessStatus = getAccessStatus(clientWebsite);
+                if (accessStatus === 'blocked') {
+                    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({
+                        success: false,
+                        error: `🚫 Quyền truy cập bị từ chối: Nguồn "${clientWebsite}" đã bị quản trị viên chặn trong Controller (Chức năng 6).`
+                    }));
+                    return;
+                }
+
+                // 2. KIỂM TRA ROUTER CACHE CÂU HỎI THƯỜNG GẶP (CHỨC NĂNG 10)
+                const lastUserMsg = [...rawMessages].reverse().find(m => m.role === 'user');
+                const userText = lastUserMsg ? lastUserMsg.content : '';
+                const cachedAnswer = lookupRouterCache(userText);
+                if (cachedAnswer) {
+                    // Trả lời ngay lập tức qua SSE với 0 tokens sinh mới và tốc độ 0.01 giây!
+                    res.writeHead(200, {
+                        'Content-Type': 'text/event-stream; charset=utf-8',
+                        'Cache-Control': 'no-cache, no-transform',
+                        'Connection': 'keep-alive',
+                        'X-Accel-Buffering': 'no'
+                    });
+                    res.write(`data: ${JSON.stringify({
+                        model: 'qwen-fast (Router Cache)',
+                        message: { role: 'assistant', content: cachedAnswer.answer },
+                        done: false
+                    })}\n\n`);
+                    res.write(`data: ${JSON.stringify({
+                        model: 'qwen-fast (Router Cache)',
+                        message: { role: 'assistant', content: '' },
+                        done: true,
+                        prompt_eval_count: 0,
+                        eval_count: 0,
+                        total_duration: 10000000 // 10ms
+                    })}\n\n`);
+                    res.write(`data: [DONE]\n\n`);
+                    res.end();
+                    return;
+                }
+
+                // 3. ÁP DỤNG RULE / CHỈ THỊ HỆ THỐNG ĐANG KÍCH HOẠT (CHỨC NĂNG 8)
+                const activePrompt = getActiveSystemPrompt();
+                const systemPromptText = activePrompt || 'Bạn là T-Rex AI - một chú khủng long vui nhộn, thông minh tích hợp trên web game T-Rex Runner. Hãy trả lời ngắn gọn, thân thiện bằng tiếng Việt, đi thẳng vào câu hỏi.';
+                const systemMsg = { role: 'system', content: systemPromptText };
                 const userAssistantMsgs = rawMessages.filter(m => m.role !== 'system').slice(-4);
                 const optimizedMessages = [systemMsg, ...userAssistantMsgs];
 

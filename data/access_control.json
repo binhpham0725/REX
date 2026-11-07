@@ -1,0 +1,55 @@
+{
+  "defaultPolicy": "allow",
+  "sources": {
+    "https://rex-nu-ten.vercel.app": {
+      "status": "allowed",
+      "note": "Web Game chính thức (Vercel)",
+      "updatedAt": "2026-11-07T19:17:07.718Z"
+    },
+    "Web Game Vercel (binhpham0725/REX)": {
+      "status": "allowed",
+      "note": "Proxy Serverless Vercel",
+      "updatedAt": "2026-11-07T19:16:53.446Z"
+    },
+    "cURL CLI / Terminal Client": {
+      "status": "allowed",
+      "note": "Lệnh test cURL từ Terminal",
+      "updatedAt": "2026-11-07T19:16:53.446Z"
+    },
+    "Node.js Backend Client": {
+      "status": "allowed",
+      "note": "Ứng dụng Node.js nội bộ",
+      "updatedAt": "2026-11-07T19:16:53.446Z"
+    },
+    "Direct API Client": {
+      "status": "allowed",
+      "note": "Client gọi API trực tiếp",
+      "updatedAt": "2026-11-07T19:16:53.446Z"
+    },
+    "https://rex-k7nyv0g7c-binhpham0725s-projects.vercel.app": {
+      "status": "allowed",
+      "note": "Phát hiện tự động từ Traffic",
+      "updatedAt": "2026-11-07T19:16:53.449Z"
+    },
+    "https://rex-rc88nxgqh-binhpham0725s-projects.vercel.app": {
+      "status": "allowed",
+      "note": "Phát hiện tự động từ Traffic",
+      "updatedAt": "2026-11-07T19:16:53.449Z"
+    },
+    "https://rex-iqegpgg55-binhpham0725s-projects.vercel.app": {
+      "status": "allowed",
+      "note": "Phát hiện tự động từ Traffic",
+      "updatedAt": "2026-11-07T19:16:53.449Z"
+    },
+    "https://my-awesome-site.com": {
+      "status": "allowed",
+      "note": "Phát hiện tự động từ Traffic",
+      "updatedAt": "2026-11-07T19:16:53.449Z"
+    },
+    "https://rex-3pd2ybqew-binhpham0725s-projects.vercel.app": {
+      "status": "allowed",
+      "note": "Phát hiện tự động từ Traffic",
+      "updatedAt": "2026-11-07T19:16:53.449Z"
+    }
+  }
+}

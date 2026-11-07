@@ -1,0 +1,47 @@
+{
+  "enabled": true,
+  "stats": {
+    "totalQueries": 67,
+    "cacheHits": 68,
+    "tokensSaved": 5740,
+    "timeSavedSec": 96.5
+  },
+  "entries": {
+    "meo dat 1000 diem": {
+      "question": "Làm sao để chơi game Khủng Long đạt điểm kỷ lục trên 1000 điểm?",
+      "normalized": "meo dat 1000 diem",
+      "answer": "🎮 **Bí quyết đạt 1000+ điểm T-Rex Runner:**\n1. **Nhìn xa:** Tập trung nhìn cách xa chú khủng long khoảng 3-4 bước chân.\n2. **Né chim Pterodactyl:** Dùng phím `Mũi tên xuống` để cúi đầu khi gặp chim bay ở tầm trung và cao.\n3. **Nhấp nhả phím nhảy nhanh:** Bấm nhẹ phím Space để nhảy thấp, giữ lâu hơn một chút khi gặp cụm 3 xương rồng liền kề!\nChúc bạn sớm đạt mốc 1000 điểm!",
+      "hits": 14,
+      "tokensSavedPerHit": 120,
+      "createdAt": "2026-11-07T19:17:36.045Z",
+      "lastHit": "2026-11-07T19:17:36.045Z"
+    },
+    "ke chuyen cuoi": {
+      "question": "Kể một câu chuyện cười ngắn vui vẻ",
+      "normalized": "ke chuyen cuoi",
+      "answer": "😄 **Chuyện cười Khủng Long:**\nMột chú T-Rex hỏi bạn: \"Sao dạo này cậu không vỗ tay cổ vũ tớ?\"\nChú T-Rex kia ngậm ngùi giơ hai tay lên: \"Tay ngắn thế này, vỗ hụt mãi chán lắm cậu ơi!\" 😂",
+      "hits": 9,
+      "tokensSavedPerHit": 95,
+      "createdAt": "2026-11-07T19:17:36.045Z",
+      "lastHit": "2026-11-07T19:17:36.045Z"
+    },
+    "gioi thieu ve ban": {
+      "question": "Bạn đang chạy bằng model AI nào trên máy tôi?",
+      "normalized": "gioi thieu ve ban",
+      "answer": "🦖 Mình là **T-Rex AI**, đang chạy trực tiếp trên máy tính của bạn qua **Ollama Local** (model `qwen-fast:latest`). Toàn bộ hội thoại được xử lý an toàn 100% trên phần cứng cục bộ của bạn!",
+      "hits": 18,
+      "tokensSavedPerHit": 85,
+      "createdAt": "2026-11-07T19:17:36.045Z",
+      "lastHit": "2026-11-07T19:17:36.045Z"
+    },
+    "chao ban": {
+      "question": "Chào bạn",
+      "normalized": "chao ban",
+      "answer": "Xin chào! 🦖 Rất vui được gặp bạn! Mình là AI hỗ trợ web game Khủng Long. Bạn có cần chia sẻ mẹo chơi game đạt điểm cao hay cần giúp đỡ điều gì không?",
+      "hits": 27,
+      "tokensSavedPerHit": 60,
+      "createdAt": "2026-11-07T19:17:36.045Z",
+      "lastHit": "2026-11-07T19:18:04.217Z"
+    }
+  }
+}

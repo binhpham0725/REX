@@ -90,28 +90,23 @@
                 </div>
             </div>
 
-            <!-- Panel Cài đặt kết nối cho Vercel Cloud -->
+            <!-- Panel Cài đặt kết nối Ollama -->
             <div class="ai-settings-panel" id="aiSettingsPanel">
                 <div class="settings-header">
-                    <strong>⚙️ KẾT NỐI AI ĐA NĂNG</strong>
+                    <strong>⚙️ KẾT NỐI OLLAMA TRÊN MÁY</strong>
                     <button id="aiCloseSettingsBtn" class="close-settings-btn">✕</button>
                 </div>
                 <div class="settings-desc">
-                    Để AI trả lời <strong>mọi câu hỏi không giới hạn</strong> trên Vercel:
+                    Đường dẫn API kết nối trực tiếp đến mô hình Ollama trên máy tính của bạn:
                 </div>
                 <div class="settings-input-group">
-                    <label>🦖 Cách 1: Link Ngrok Ollama (chạy AI trên máy bạn):</label>
-                    <input type="url" id="aiTunnelInput" class="ai-tunnel-input" placeholder="https://xxxx.ngrok-free.app" spellcheck="false">
-                    <span style="font-size:10px; color:var(--text-muted);">Lệnh bật trên máy: <code>ngrok http 11434</code></span>
-                </div>
-                <div class="settings-input-group" style="margin-top:6px;">
-                    <label>☁️ Cách 2: Gemini API Key (Miễn phí 100%, chạy 24/7):</label>
-                    <input type="password" id="aiGeminiKeyInput" class="ai-tunnel-input" placeholder="AIzaSy..." spellcheck="false">
-                    <span style="font-size:10px; color:var(--text-muted);"><a href="https://aistudio.google.com/apikey" target="_blank" style="color:#1a73e8;text-decoration:underline;">Lấy key miễn phí tại Google AI Studio</a></span>
+                    <label>Link Ngrok Ollama:</label>
+                    <input type="url" id="aiTunnelInput" class="ai-tunnel-input" placeholder="https://e6a0-116-99-255-211.ngrok-free.app" spellcheck="false">
+                    <span style="font-size:10px; color:var(--text-muted); margin-top:3px;">Lệnh bật trên máy: <code>ngrok http 11434 --host-header=localhost:11434</code></span>
                 </div>
                 <div class="settings-actions" style="margin-top:8px;">
-                    <button id="aiSaveTunnelBtn" class="btn btn-sm primary">💾 Lưu cài đặt</button>
-                    <button id="aiResetTunnelBtn" class="btn btn-sm">↺ Đặt lại</button>
+                    <button id="aiSaveTunnelBtn" class="btn btn-sm primary">💾 Lưu kết nối</button>
+                    <button id="aiResetTunnelBtn" class="btn btn-sm">↺ Đặt lại mặc định</button>
                 </div>
             </div>
 
@@ -197,11 +192,10 @@
 
         const geminiKeyInput = document.getElementById('aiGeminiKeyInput');
 
+        const DEFAULT_NGROK_URL = 'https://e6a0-116-99-255-211.ngrok-free.app';
+
         if (tunnelInput) {
-            tunnelInput.value = localStorage.getItem('rex_ollama_tunnel') || '';
-        }
-        if (geminiKeyInput) {
-            geminiKeyInput.value = localStorage.getItem('rex_gemini_key') || '';
+            tunnelInput.value = localStorage.getItem('rex_ollama_tunnel') || DEFAULT_NGROK_URL;
         }
 
         if (settingsBtn && settingsPanel) {
@@ -218,22 +212,12 @@
         if (saveTunnelBtn) {
             saveTunnelBtn.addEventListener('click', () => {
                 const tunnelVal = tunnelInput ? tunnelInput.value.trim().replace(/\/+$/, '') : '';
-                const geminiVal = geminiKeyInput ? geminiKeyInput.value.trim() : '';
-
                 if (tunnelVal) {
                     localStorage.setItem('rex_ollama_tunnel', tunnelVal);
-                    appendSystemNotice(`🔗 Đã lưu link Ngrok: <strong>${tunnelVal}</strong>`);
+                    appendSystemNotice(`🔗 Đã lưu link Ollama: <strong>${tunnelVal}</strong>`);
                 } else {
                     localStorage.removeItem('rex_ollama_tunnel');
                 }
-
-                if (geminiVal) {
-                    localStorage.setItem('rex_gemini_key', geminiVal);
-                    appendSystemNotice(`☁️ Đã lưu Gemini API Key. AI sẵn sàng trả lời mọi câu hỏi 24/7!`);
-                } else {
-                    localStorage.removeItem('rex_gemini_key');
-                }
-
                 settingsPanel.classList.remove('open');
                 fetchModels();
             });
@@ -242,10 +226,8 @@
         if (resetTunnelBtn) {
             resetTunnelBtn.addEventListener('click', () => {
                 localStorage.removeItem('rex_ollama_tunnel');
-                localStorage.removeItem('rex_gemini_key');
-                if (tunnelInput) tunnelInput.value = '';
-                if (geminiKeyInput) geminiKeyInput.value = '';
-                appendSystemNotice('↺ Đã đặt lại về cấu hình mặc định.');
+                if (tunnelInput) tunnelInput.value = DEFAULT_NGROK_URL;
+                appendSystemNotice('↺ Đã đặt lại về link Ollama mặc định.');
                 settingsPanel.classList.remove('open');
                 fetchModels();
             });
@@ -435,11 +417,9 @@
 
         try {
             const apiUrl = getApiEndpoint('/api/ai/chat');
-            const tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || '';
-            const geminiKey = localStorage.getItem('rex_gemini_key') || '';
+            const tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || 'https://e6a0-116-99-255-211.ngrok-free.app';
             const headers = { 'Content-Type': 'application/json' };
             if (tunnelUrl) headers['x-ollama-url'] = tunnelUrl;
-            if (geminiKey) headers['x-gemini-key'] = geminiKey;
 
             const response = await fetch(apiUrl, {
                 method: 'POST',
@@ -448,8 +428,7 @@
                     model: chatState.selectedModel,
                     messages: chatState.messages,
                     think: chatState.think,
-                    ollamaUrl: tunnelUrl,
-                    geminiKey: geminiKey
+                    ollamaUrl: tunnelUrl
                 })
             });
 

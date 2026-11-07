@@ -1,9 +1,10 @@
 /**
- * Vercel Serverless Function: GET /api/ai/models
+ * API lấy danh sách mô hình trực tiếp từ Ollama
  */
 
+const DEFAULT_OLLAMA_URL = process.env.OLLAMA_URL || 'https://e6a0-116-99-255-211.ngrok-free.app';
+
 export default async function handler(req, res) {
-    // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-ollama-url');
@@ -12,16 +13,18 @@ export default async function handler(req, res) {
         return res.status(204).end();
     }
 
-    // Lấy URL Ollama từ header, query, biến môi trường hoặc local
     const customUrl = req.headers['x-ollama-url'] || req.query.url;
-    const ollamaBaseUrl = customUrl || process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+    const ollamaBaseUrl = customUrl || DEFAULT_OLLAMA_URL;
 
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
         const ollamaRes = await fetch(`${ollamaBaseUrl}/api/tags`, {
             method: 'GET',
+            headers: {
+                'ngrok-skip-browser-warning': '1'
+            },
             signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -36,19 +39,16 @@ export default async function handler(req, res) {
             });
         }
     } catch (err) {
-        // Nếu không kết nối được (ví dụ chạy trên Vercel Cloud chưa gắn Tunnel Ngrok)
+        console.error('[Models Error]', err);
     }
 
-    // Fallback khi chạy trên Vercel Cloud mà máy tính chưa bật Ngrok Tunnel
     return res.status(200).json({
         success: true,
         online: false,
-        isVercel: true,
-        message: 'Website đang chạy trên Vercel Cloud.',
+        source: ollamaBaseUrl,
         models: [
             { name: 'qwen-fast:latest' },
-            { name: 'qwen3.5:4b' },
-            { name: 'qwen3.5-4k:latest' }
+            { name: 'qwen3.5:4b' }
         ]
     });
 }

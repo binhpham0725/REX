@@ -547,6 +547,19 @@ function extractTokensFromResponse(r) {
             const evalMatch = rawStr.match(/"eval_count":\s*(\d+)/);
             if (promptMatch) promptTokens = parseInt(promptMatch[1], 10);
             if (evalMatch) completionTokens = parseInt(evalMatch[1], 10);
+
+            // Nếu là request chat thành công nhưng chưa bắt được trường eval_count
+            if (promptTokens === 0 && completionTokens === 0 && r.request?.uri?.includes('/api/chat') && r.response.status_code === 200) {
+                let contentLen = 0;
+                const matches = rawStr.matchAll(/"content":"([^"]*)"/g);
+                for (const m of matches) {
+                    contentLen += m[1].length;
+                }
+                if (contentLen > 0) {
+                    completionTokens = Math.max(1, Math.round(contentLen / 3));
+                    promptTokens = Math.max(15, Math.round((r.request?.raw ? Buffer.from(r.request.raw, 'base64').toString('utf8').length : 120) / 4));
+                }
+            }
         } catch (e) {}
     }
 
@@ -595,13 +608,22 @@ async function syncTrafficData() {
 
                 // Nếu request này chưa được ghi nhận vào database
                 if (!db.processedIds[reqId]) {
-                    db.processedIds[reqId] = r.start;
-
                     const siteName = extractWebsiteIdentity(r);
                     const isSuccess = r.response.status_code === 200;
                     const durationSec = r.duration ? r.duration / 1000000000 : 0;
                     const endpoint = r.request?.uri || '/api/chat';
                     const tokens = extractTokensFromResponse(r);
+                    const isChat = endpoint.includes('/chat');
+                    const isFinal = !isChat || tokens.totalTokens > 0;
+
+                    db.processedIds[reqId] = {
+                        time: r.start,
+                        site: siteName,
+                        promptTokens: tokens.promptTokens,
+                        completionTokens: tokens.completionTokens,
+                        totalTokens: tokens.totalTokens,
+                        finalized: isFinal
+                    };
 
                     if (!db.websites[siteName]) {
                         db.websites[siteName] = {
@@ -656,6 +678,43 @@ async function syncTrafficData() {
                     if (db.recentAudit.length > 10) {
                         db.recentAudit.pop();
                     }
+                } else {
+                    // Nếu request này đã lưu nhưng trước đó token = 0 (bị lưu sớm khi đang stream dở)
+                    const proc = typeof db.processedIds[reqId] === 'object' ? db.processedIds[reqId] : { totalTokens: 0, finalized: false };
+                    if (!proc.finalized || proc.totalTokens === 0) {
+                        const tokens = extractTokensFromResponse(r);
+                        if (tokens.totalTokens > 0) {
+                            const siteName = extractWebsiteIdentity(r);
+                            const site = db.websites[siteName];
+                            const diffP = tokens.promptTokens - (proc.promptTokens || 0);
+                            const diffC = tokens.completionTokens - (proc.completionTokens || 0);
+                            const diffT = tokens.totalTokens - (proc.totalTokens || 0);
+
+                            if (site && diffT > 0) {
+                                site.promptTokens += Math.max(0, diffP);
+                                site.completionTokens += Math.max(0, diffC);
+                                site.totalTokens += Math.max(0, diffT);
+                            }
+
+                            // Cập nhật audit log tương ứng
+                            const auditItem = db.recentAudit.find(a => a.id === reqId);
+                            if (auditItem) {
+                                auditItem.promptTokens = tokens.promptTokens;
+                                auditItem.completionTokens = tokens.completionTokens;
+                                auditItem.totalTokens = tokens.totalTokens;
+                                if (r.duration) auditItem.duration = r.duration / 1000000000;
+                            }
+
+                            db.processedIds[reqId] = {
+                                time: r.start,
+                                site: siteName,
+                                promptTokens: tokens.promptTokens,
+                                completionTokens: tokens.completionTokens,
+                                totalTokens: tokens.totalTokens,
+                                finalized: true
+                            };
+                        }
+                    }
                 }
             });
 
@@ -692,8 +751,8 @@ async function handleWebUsageStats(rl) {
     process.stdout.write('\x1b[?25l');
     console.clear();
 
-    // Định nghĩa độ rộng cột chuẩn xác (Tổng chiều rộng: 101 ký tự)
-    const colWidths = [3, 21, 14, 6, 14, 5, 5, 8];
+    // Định nghĩa độ rộng cột chuẩn xác (Tổng chiều rộng: 111 ký tự - không bao giờ rớt dòng!)
+    const colWidths = [3, 22, 17, 7, 16, 6, 6, 9];
 
     const tableTop = '┌' + colWidths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
     const tableMid = '├' + colWidths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
@@ -709,10 +768,10 @@ async function handleWebUsageStats(rl) {
         // Di chuyển con trỏ về góc trên cùng bên trái [H] và ghi đè từng dòng [K]
         let out = '\x1b[H';
 
-        out += `${C.cyan}╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}\x1b[K\n`;
-        out += `${C.cyan}║${C.bright}${C.yellow}                 🦖 T-REX AI - REAL-TIME WEB USAGE & TOKEN MONITOR (TỰ ĐỘNG CẬP NHẬT 1.0s)                 ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
-        out += `${C.cyan}║${C.dim}                                Bấm [Q] hoặc [ESC] hoặc [Enter] để quay lại Menu                            ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
-        out += `${C.cyan}╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\x1b[K\n`;
+        out += `${C.cyan}╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}\x1b[K\n`;
+        out += `${C.cyan}║${C.bright}${C.yellow}                    🦖 T-REX AI - REAL-TIME WEB USAGE & TOKEN MONITOR (CẬP NHẬT 1.0s)                    ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
+        out += `${C.cyan}║${C.dim}                       Bấm [Q]/[ESC] để thoát ra Menu  │  Bấm [C] để Reset bộ đếm số liệu                       ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
+        out += `${C.cyan}╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\x1b[K\n`;
 
         if (siteList.length === 0) {
             out += `\n${C.yellow}  ℹ️ Hiện tại chưa ghi nhận yêu cầu truy cập nào qua Ngrok Tunnel.${C.reset}\x1b[K\n`;

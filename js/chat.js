@@ -442,6 +442,10 @@
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
+            let promptTokens = 0;
+            let evalTokens = 0;
+            let totalDurationNs = 0;
+            let evalDurationNs = 0;
 
             while (true) {
                 const { value, done } = await reader.read();
@@ -465,6 +469,12 @@
                         if (parsed.error) {
                             throw new Error(parsed.error);
                         }
+
+                        // Thu thập số liệu token thực tế từ Ollama
+                        if (parsed.prompt_eval_count) promptTokens = parsed.prompt_eval_count;
+                        if (parsed.eval_count) evalTokens = parsed.eval_count;
+                        if (parsed.total_duration) totalDurationNs = parsed.total_duration;
+                        if (parsed.eval_duration) evalDurationNs = parsed.eval_duration;
 
                         // Xử lý stream thinking (nếu có)
                         if (parsed.message?.thinking) {
@@ -493,7 +503,7 @@
                             scrollToBottom();
                         }
                     } catch (parseErr) {
-                        // BềEqua dòng JSON không hoàn chỉnh
+                        // Bỏ qua dòng JSON không hoàn chỉnh
                     }
                 }
             }
@@ -501,6 +511,35 @@
             // Kết thúc streaming
             if (thinkingTimerInterval) {
                 clearInterval(thinkingTimerInterval);
+            }
+
+            // Tính toán số liệu thống kê Token & Tốc độ
+            if (promptTokens === 0) {
+                promptTokens = Math.max(12, Math.round(text.length / 3));
+            }
+            if (evalTokens === 0 && fullContent.length > 0) {
+                evalTokens = Math.max(1, Math.round(fullContent.length / 3));
+            }
+            const totalTokens = promptTokens + evalTokens;
+            const elapsedSec = totalDurationNs > 0 ? (totalDurationNs / 1000000000).toFixed(1) : ((Date.now() - startTime) / 1000).toFixed(1);
+            const speedTokPerSec = (evalDurationNs > 0 && evalTokens > 0)
+                ? (evalTokens / (evalDurationNs / 1000000000)).toFixed(1)
+                : ((elapsedSec > 0 && evalTokens > 0) ? (evalTokens / elapsedSec).toFixed(1) : '0.0');
+
+            // Hiển thị nhãn số Token và Tốc độ ngay dưới câu trả lời của AI
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'ai-msg-meta';
+            metaDiv.innerHTML = `
+                <span class="meta-tag token-tag" title="Số token đã xử lý cho câu hỏi này">
+                    🪙 <strong>${totalTokens}</strong> tokens <span class="meta-sub">(${promptTokens} in / ${evalTokens} out)</span>
+                </span>
+                <span class="meta-tag speed-tag" title="Thời gian phản hồi và tốc độ sinh chữ">
+                    ⚡ <strong>${elapsedSec}s</strong> <span class="meta-sub">(${speedTokPerSec} tok/s)</span>
+                </span>
+            `;
+            const contentWrapper = msgElem.querySelector('.msg-content-wrapper');
+            if (contentWrapper) {
+                contentWrapper.appendChild(metaDiv);
             }
 
             // Lưu phản hồi của AI vào lịch sử

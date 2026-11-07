@@ -2,7 +2,19 @@
  * API lấy danh sách mô hình trực tiếp từ Ollama
  */
 
-const DEFAULT_OLLAMA_URL = process.env.OLLAMA_URL || 'https://e6a0-116-99-255-211.ngrok-free.app';
+import fs from 'fs';
+import path from 'path';
+
+function getDefaultOllamaUrl() {
+    try {
+        const tunnelFile = path.join(process.cwd(), 'data', 'current_tunnel.txt');
+        if (fs.existsSync(tunnelFile)) {
+            const savedUrl = fs.readFileSync(tunnelFile, 'utf8').trim();
+            if (savedUrl && savedUrl.startsWith('https://')) return savedUrl;
+        }
+    } catch (e) {}
+    return process.env.OLLAMA_URL || 'https://43e9-116-99-255-211.ngrok-free.app';
+}
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,7 +26,7 @@ export default async function handler(req, res) {
     }
 
     const customUrl = req.headers['x-ollama-url'] || req.query.url;
-    const ollamaBaseUrl = customUrl || DEFAULT_OLLAMA_URL;
+    const ollamaBaseUrl = customUrl || getDefaultOllamaUrl();
 
     // Xác định tên trang web đang gọi
     let clientWebsite = req.headers['x-client-origin'] || req.headers['origin'] || '';

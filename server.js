@@ -258,7 +258,7 @@ const server = http.createServer((req, res) => {
 
     // 4.0 GET /api/ai/tunnel - Lấy Public URL Ngrok hiện tại
     if (pathname === '/api/ai/tunnel' && req.method === 'GET') {
-        let currentUrl = 'https://7e7f-116-99-255-211.ngrok-free.app';
+        let currentUrl = 'https://43e9-116-99-255-211.ngrok-free.app';
         try {
             const tunnelFile = path.join(DATA_DIR, 'current_tunnel.txt');
             if (fs.existsSync(tunnelFile)) {

@@ -1,7 +1,7 @@
 /**
  * T-Rex Local AI Chatbot Module
  * Kết nối với Ollama AI đang chạy trực tiếp trên máy tính qua Server API (/api/ai/chat)
- * HềEtrợ: Real-time Streaming, Thinking Process (collapsible), Model Selection, Markdown styling
+ * Hỗ trợ: Real-time Streaming, Thinking Process (collapsible), Model Selection, Markdown styling
  */
 
 (function () {
@@ -10,7 +10,7 @@
         isOpen: false,
         selectedModel: 'qwen-fast:latest',
         availableModels: [],
-        think: false, // MẶC ĐỊNH FALSE ĐềETRẢ LỜI NGAY TRONG VÀI GIÁE, KHÔNG SUY NGHĨ NGÁE PHÚT
+        think: false, // Mặc định false để trả lời ngay trong vài giây, không suy nghĩ lâu
         messages: [
             {
                 role: 'system',
@@ -31,43 +31,49 @@
         fetchModels();
     }
 
+    const DEFAULT_NGROK_URL = 'https://43e9-116-99-255-211.ngrok-free.app';
+
     // Tự động đồng bộ link Tunnel Ngrok mới nhất từ Backend (chống lỗi khi Ngrok khởi động lại)
-    async function syncTunnelFromServer() {
+    async function syncTunnelFromServer(force = false) {
         try {
             const res = await fetch(getApiEndpoint('/api/ai/tunnel'));
             const data = await res.json();
             if (data.success && data.url) {
-                const currentStored = localStorage.getItem('rex_ollama_tunnel');
-                // Nếu chưa lưu hoặc đang lưu link cũ bị lỗi thì tự động cập nhật
-                if (!currentStored || currentStored.includes('e6a0-')) {
+                const isCustom = localStorage.getItem('rex_tunnel_is_custom') === 'true';
+                if (!isCustom || force) {
                     localStorage.setItem('rex_ollama_tunnel', data.url);
                     const tunnelInput = document.getElementById('aiTunnelInput');
                     if (tunnelInput) tunnelInput.value = data.url;
+                    return data.url;
                 }
             }
         } catch (e) {}
+        let stored = localStorage.getItem('rex_ollama_tunnel');
+        if (!stored || stored.includes('e6a0-') || stored.includes('7e7f-')) {
+            stored = DEFAULT_NGROK_URL;
+            localStorage.setItem('rex_ollama_tunnel', DEFAULT_NGROK_URL);
+        }
+        return stored;
     }
 
-    // 0. Xác định địa chềEAPI Server thông minh
+    // 0. Xác định địa chỉ API Server thông minh
     function getApiEndpoint(endpointPath) {
-        // Nếu trang web đang chạy trên bất kỳ HTTP/HTTPS host nào (Vercel, Localhost, IP mạng LAN...)
         if (window.location.protocol.startsWith('http')) {
-            return endpointPath; // LUÔN DÙNG ĐƯỜNG DẪN TƯƠNG ĐỐI TRÊN CÙNG DOMAIN
+            return endpointPath; // Dùng đường dẫn tương đối trên cùng domain
         }
-        // ChềEkhi mềEbằng file:// cục bềE(double-click index.html offline không qua server)
         return 'http://localhost:8080' + endpointPath;
     }
 
-    // 1. Tạo giao diện HTML cho Nút mềEchat và Cửa sềEchat
+    // 1. Tạo giao diện HTML cho Nút mở chat và Cửa sổ chat
     function renderChatHTML() {
-        // Nút mềEchat dạng Floating Action Button (FAB)
+        // Nút mở chat dạng Floating Action Button (FAB)
         const fabBtn = document.createElement('button');
         fabBtn.id = 'aiChatFab';
         fabBtn.className = 'ai-chat-fab';
-        fabBtn.title = 'MềEkhung chat với AI Local (Ollama)';
+        fabBtn.title = 'Mở khung chat với AI Local (Ollama)';
         fabBtn.innerHTML = `
             <div class="fab-icon-wrapper">
-                <span class="fab-icon">🤁E/span>
+                <span class="fab-icon">🦖</span>
                 <span class="fab-pulse-ring"></span>
             </div>
             <span class="fab-text">Chat với AI</span>
@@ -75,7 +81,7 @@
         `;
         document.body.appendChild(fabBtn);
 
-        // Khung cửa sềEChat (Chat Window)
+        // Khung cửa sổ Chat (Chat Window)
         const chatWindow = document.createElement('div');
         chatWindow.id = 'aiChatWindow';
         chatWindow.className = 'ai-chat-window';
@@ -83,11 +89,11 @@
             <!-- Header -->
             <div class="ai-chat-header">
                 <div class="ai-header-left">
-                    <span class="ai-avatar">🦁E/span>
+                    <span class="ai-avatar">🦖</span>
                     <div class="ai-header-info">
                         <div class="ai-title-row">
                             <span class="ai-name">T-Rex Local AI</span>
-                            <span class="ai-status-indicator online" id="aiStatusIndicator" title="Ollama đang hoạt động">◁EOnline</span>
+                            <span class="ai-status-indicator online" id="aiStatusIndicator" title="Ollama đang hoạt động">● Online</span>
                         </div>
                         <div class="ai-model-selector-wrapper">
                             <span class="model-icon">⚡</span>
@@ -98,21 +104,21 @@
                     </div>
                 </div>
                 <div class="ai-header-actions">
-                    <button id="aiModeToggleBtn" class="ai-mode-toggle-btn fast" title="Chế đềEphản hồi: Bấm đềEchuyển giữa Nhanh (vài giây) hoặc Suy nghĩ sâu">
+                    <button id="aiModeToggleBtn" class="ai-mode-toggle-btn fast" title="Chế độ phản hồi: Bấm để chuyển giữa Nhanh (vài giây) hoặc Suy nghĩ sâu">
                         <span class="mode-icon">⚡</span>
                         <span class="mode-text">Nhanh</span>
                     </button>
-                    <button id="aiSettingsBtn" class="ai-icon-btn" title="Cài đặt kết nối AI (Vercel Cloud / Ngrok Tunnel)">⚙︁E/button>
-                    <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑�E�E/button>
-                    <button id="aiCloseBtn" class="ai-icon-btn" title="Đóng khung chat">✁E/button>
+                    <button id="aiSettingsBtn" class="ai-icon-btn" title="Cài đặt kết nối AI (Vercel Cloud / Ngrok Tunnel)">⚙️</button>
+                    <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑️</button>
+                    <button id="aiCloseBtn" class="ai-icon-btn" title="Đóng khung chat">✕</button>
                 </div>
             </div>
 
             <!-- Panel Cài đặt kết nối Ollama -->
             <div class="ai-settings-panel" id="aiSettingsPanel">
                 <div class="settings-header">
-                    <strong>⚙︁EKẾT NỐI OLLAMA TRÊN MÁY</strong>
-                    <button id="aiCloseSettingsBtn" class="close-settings-btn">✁E/button>
+                    <strong>⚙️ KẾT NỐI OLLAMA TRÊN MÁY</strong>
+                    <button id="aiCloseSettingsBtn" class="close-settings-btn">✕</button>
                 </div>
                 <div class="settings-desc">
                     Đường dẫn API kết nối trực tiếp đến mô hình Ollama trên máy tính của bạn:
@@ -130,16 +136,16 @@
 
             <!-- Messages Container -->
             <div class="ai-chat-body" id="aiChatBody">
-                <!-- Lời chào mềEđầu -->
+                <!-- Lời chào mở đầu -->
                 <div class="ai-msg-bubble ai-msg-welcome">
-                    <div class="msg-avatar">🦁E/div>
+                    <div class="msg-avatar">🦖</div>
                     <div class="msg-content">
                         <p><strong>Xin chào!</strong> Mình là AI chạy trực tiếp trên máy tính của bạn (qua <strong>Ollama Local</strong>).</p>
-                        <p>Bạn có thềEhỏi mình mọi thứ: mẹo chơi game Khủng Long đạt điểm cao, lập trình, giải toán hay tâm sự vui vẻ!</p>
+                        <p>Bạn có thể hỏi mình mọi thứ: mẹo chơi game Khủng Long đạt điểm cao, lập trình, giải toán hay tâm sự vui vẻ!</p>
                         <div class="quick-prompts-wrapper">
-                            <button class="quick-prompt-btn" data-prompt="Làm sao đềEchơi game Khủng Long đạt điểm kỷ lục trên 1000 điểm?">🎮 Mẹo đạt 1000+ điểm?</button>
-                            <button class="quick-prompt-btn" data-prompt="KềEmột câu chuyện cười ngắn vui vẻ">�E KềEchuyện cười</button>
-                            <button class="quick-prompt-btn" data-prompt="Bạn đang chạy bằng model AI nào trên máy tôi?">💻 Giới thiệu vềEbạn</button>
+                            <button class="quick-prompt-btn" data-prompt="Làm sao để chơi game Khủng Long đạt điểm kỷ lục trên 1000 điểm?">🎮 Mẹo đạt 1000+ điểm?</button>
+                            <button class="quick-prompt-btn" data-prompt="Kể một câu chuyện cười ngắn vui vẻ">😄 Kể chuyện cười</button>
+                            <button class="quick-prompt-btn" data-prompt="Bạn đang chạy bằng model AI nào trên máy tôi?">💻 Giới thiệu về bạn</button>
                         </div>
                     </div>
                 </div>
@@ -148,7 +154,7 @@
             <!-- Footer / Input -->
             <div class="ai-chat-footer">
                 <div class="ai-input-wrapper">
-                    <textarea id="aiChatInput" class="ai-chat-input" rows="1" placeholder="Nhắn tin cho AI local (Enter đềEgửi)..."></textarea>
+                    <textarea id="aiChatInput" class="ai-chat-input" rows="1" placeholder="Nhắn tin cho AI local (Enter để gửi)..."></textarea>
                     <button id="aiSendBtn" class="ai-send-btn" title="Gửi tin nhắn (Enter)">
                         <span class="send-icon">➤</span>
                     </button>
@@ -176,7 +182,7 @@
         fab.addEventListener('click', toggleChat);
         closeBtn.addEventListener('click', toggleChat);
 
-        // Bật/Tắt chế đềENhanh vs Suy nghĩ sâu
+        // Bật/Tắt chế độ Nhanh vs Suy nghĩ sâu
         const modeToggleBtn = document.getElementById('aiModeToggleBtn');
         if (modeToggleBtn) {
             modeToggleBtn.addEventListener('click', () => {
@@ -184,11 +190,11 @@
                 if (chatState.think) {
                     modeToggleBtn.className = 'ai-mode-toggle-btn think';
                     modeToggleBtn.innerHTML = '<span class="mode-icon">🧠</span> <span class="mode-text">Suy nghĩ</span>';
-                    appendSystemNotice('🧠 Đã bật chế đềE<strong>Suy nghĩ sâu</strong> (phù hợp lập trình, toán học, giải đềEphức tạp).');
+                    appendSystemNotice('🧠 Đã bật chế độ <strong>Suy nghĩ sâu</strong> (phù hợp lập trình, toán học, giải đề phức tạp).');
                 } else {
                     modeToggleBtn.className = 'ai-mode-toggle-btn fast';
                     modeToggleBtn.innerHTML = '<span class="mode-icon">⚡</span> <span class="mode-text">Nhanh</span>';
-                    appendSystemNotice('⚡ Đã bật chế đềE<strong>Trả lời nhanh</strong> (phản hồi trong 3-5 giây, không suy nghĩ lâu).');
+                    appendSystemNotice('⚡ Đã bật chế độ <strong>Trả lời nhanh</strong> (phản hồi trong 3-5 giây, không suy nghĩ lâu).');
                 }
             });
         }
@@ -208,12 +214,8 @@
         const saveTunnelBtn = document.getElementById('aiSaveTunnelBtn');
         const resetTunnelBtn = document.getElementById('aiResetTunnelBtn');
 
-        const geminiKeyInput = document.getElementById('aiGeminiKeyInput');
-
-        const DEFAULT_NGROK_URL = 'https://43e9-116-99-255-211.ngrok-free.app';
-
         let storedTunnel = localStorage.getItem('rex_ollama_tunnel');
-        if (storedTunnel && storedTunnel.includes('e6a0-')) {
+        if (storedTunnel && (storedTunnel.includes('e6a0-') || storedTunnel.includes('7e7f-'))) {
             storedTunnel = DEFAULT_NGROK_URL;
             localStorage.setItem('rex_ollama_tunnel', DEFAULT_NGROK_URL);
         }
@@ -238,9 +240,11 @@
                 const tunnelVal = tunnelInput ? tunnelInput.value.trim().replace(/\/+$/, '') : '';
                 if (tunnelVal) {
                     localStorage.setItem('rex_ollama_tunnel', tunnelVal);
+                    localStorage.setItem('rex_tunnel_is_custom', 'true');
                     appendSystemNotice(`🔗 Đã lưu link Ollama: <strong>${tunnelVal}</strong>`);
                 } else {
                     localStorage.removeItem('rex_ollama_tunnel');
+                    localStorage.removeItem('rex_tunnel_is_custom');
                 }
                 settingsPanel.classList.remove('open');
                 fetchModels();
@@ -248,10 +252,12 @@
         }
 
         if (resetTunnelBtn) {
-            resetTunnelBtn.addEventListener('click', () => {
+            resetTunnelBtn.addEventListener('click', async () => {
                 localStorage.removeItem('rex_ollama_tunnel');
-                if (tunnelInput) tunnelInput.value = DEFAULT_NGROK_URL;
-                appendSystemNotice('↺ Đã đặt lại vềElink Ollama mặc định.');
+                localStorage.removeItem('rex_tunnel_is_custom');
+                const freshUrl = await syncTunnelFromServer(true);
+                if (tunnelInput) tunnelInput.value = freshUrl;
+                appendSystemNotice('↺ Đã đặt lại về link Ollama mặc định.');
                 settingsPanel.classList.remove('open');
                 fetchModels();
             });
@@ -265,16 +271,16 @@
 
         // Xóa lịch sử
         clearBtn.addEventListener('click', () => {
-            if (confirm('Bạn có muốn xóa toàn bềElịch sử trò chuyện không?')) {
+            if (confirm('Bạn có muốn xóa toàn bộ lịch sử trò chuyện không?')) {
                 chatState.messages = [
                     {
                         role: 'system',
-                        content: 'Bạn là T-Rex AI, một trợ lý thông minh và thân thiện được tích hợp trực tiếp trên web game Khủng Long (T-Rex Runner). Hãy trả lời bằng tiếng Việt tự nhiên, hữu ích, ngắn gọn và súc tích.'
+                        content: 'Bạn là T-Rex AI - một chú khủng long vui nhộn, thông minh tích hợp trên web game T-Rex Runner. Hãy trả lời ngắn gọn, thân thiện bằng tiếng Việt, đi thẳng vào câu hỏi.'
                     }
                 ];
                 chatBody.innerHTML = `
                     <div class="ai-msg-bubble ai-msg-welcome">
-                        <div class="msg-avatar">🦁E/div>
+                        <div class="msg-avatar">🦖</div>
                         <div class="msg-content">
                             <p>Cuộc trò chuyện mới đã bắt đầu! Hãy nhập câu hỏi của bạn bên dưới nhé.</p>
                         </div>
@@ -309,7 +315,7 @@
                 }
             }
 
-            // Click vào tiêu đềE"Suy nghĩ" đềEmềErộng / thu gọn
+            // Click vào tiêu đề "Suy nghĩ" để mở rộng / thu gọn
             const thinkingHeader = e.target.closest('.thinking-toggle-header');
             if (thinkingHeader) {
                 const container = thinkingHeader.closest('.thinking-accordion');
@@ -320,7 +326,7 @@
         });
     }
 
-    // 3. Đóng mềEcửa sềEChat
+    // 3. Đóng mở cửa sổ Chat
     function toggleChat() {
         const win = document.getElementById('aiChatWindow');
         const fab = document.getElementById('aiChatFab');
@@ -344,7 +350,11 @@
         const statusBadge = document.getElementById('aiStatusBadge');
 
         try {
-            const tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || '';
+            let tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || DEFAULT_NGROK_URL;
+            if (tunnelUrl.includes('e6a0-') || tunnelUrl.includes('7e7f-')) {
+                tunnelUrl = DEFAULT_NGROK_URL;
+                localStorage.setItem('rex_ollama_tunnel', DEFAULT_NGROK_URL);
+            }
             const headers = {};
             if (tunnelUrl) headers['x-ollama-url'] = tunnelUrl;
 
@@ -371,7 +381,7 @@
                 }
 
                 statusIndicator.className = 'ai-status-indicator online';
-                statusIndicator.textContent = data.isVercel ? '◁EOnline (Vercel)' : '◁EOnline (Ollama)';
+                statusIndicator.textContent = data.isVercel ? '● Online (Vercel)' : '● Online (Ollama)';
                 statusBadge.className = 'fab-badge online';
                 statusBadge.title = 'AI đã sẵn sàng trò chuyện!';
             } else {
@@ -387,7 +397,7 @@
         const statusBadge = document.getElementById('aiStatusBadge');
         if (statusIndicator) {
             statusIndicator.className = 'ai-status-indicator offline';
-            statusIndicator.textContent = '◁EOffline';
+            statusIndicator.textContent = '○ Offline';
             statusIndicator.title = msg;
         }
         if (statusBadge) {
@@ -441,10 +451,10 @@
 
         try {
             const apiUrl = getApiEndpoint('/api/ai/chat');
-            let tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || 'https://43e9-116-99-255-211.ngrok-free.app';
-            if (tunnelUrl.includes('e6a0-')) {
-                tunnelUrl = 'https://43e9-116-99-255-211.ngrok-free.app';
-                localStorage.setItem('rex_ollama_tunnel', tunnelUrl);
+            let tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || DEFAULT_NGROK_URL;
+            if (tunnelUrl.includes('e6a0-') || tunnelUrl.includes('7e7f-')) {
+                tunnelUrl = DEFAULT_NGROK_URL;
+                localStorage.setItem('rex_ollama_tunnel', DEFAULT_NGROK_URL);
             }
             const headers = { 'Content-Type': 'application/json' };
             if (tunnelUrl) headers['x-ollama-url'] = tunnelUrl;
@@ -462,7 +472,7 @@
 
             if (!response.ok) {
                 if (response.status === 404) {
-                    throw new Error(`HTTP 404 (Không tìm thấy endpoint API). Vui lòng đảm bảo bạn đang mềEweb tại địa chềEhttp://localhost:8080/ và đã chạy "node server.js"!`);
+                    throw new Error(`HTTP 404 (Không tìm thấy endpoint API). Vui lòng đảm bảo bạn đang mở web tại http://localhost:8080/ hoặc kiểm tra lại đường hầm Ngrok!`);
                 }
                 throw new Error(`HTTP error ${response.status}`);
             }
@@ -581,6 +591,8 @@
             contentElem.innerHTML = `
                 <div class="ai-error-box"><p><strong>⚠️ ${err.message}</strong></p><p style="margin-top: 6px; font-size: 11.5px; opacity: 0.9;">💡 <strong>Khắc phục:</strong><br>1. Đảm bảo ứng dụng <strong>Ollama</strong> và đường hầm <strong>Ngrok / AI Controller</strong> đang hoạt động.<br>2. Thử bấm gửi lại câu hỏi.</p></div>
             `;
+            // Tự động đồng bộ lại link nếu link cũ chết
+            syncTunnelFromServer();
         } finally {
             if (thinkingTimerInterval) clearInterval(thinkingTimerInterval);
             chatState.isGenerating = false;
@@ -607,9 +619,9 @@
         bubble.className = 'ai-msg-bubble assistant';
 
         bubble.innerHTML = `
-            <div class="msg-avatar">🦁E/div>
+            <div class="msg-avatar">🦖</div>
             <div class="msg-content-wrapper">
-                <!-- Khối hiển thềEQuá trình suy nghĩ (Thinking) giống hệt Ollama -->
+                <!-- Khối hiển thị Quá trình suy nghĩ (Thinking) giống hệt Ollama -->
                 <div class="thinking-accordion" id="thinkingAccordion">
                     <div class="thinking-toggle-header">
                         <span class="thinking-icon">🧠</span>

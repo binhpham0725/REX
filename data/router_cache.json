@@ -2,8 +2,8 @@
   "enabled": true,
   "stats": {
     "totalQueries": 67,
-    "cacheHits": 68,
-    "tokensSaved": 5740,
+    "cacheHits": 69,
+    "tokensSaved": 5800,
     "timeSavedSec": 96.5
   },
   "entries": {
@@ -38,10 +38,10 @@
       "question": "Chào bạn",
       "normalized": "chao ban",
       "answer": "Xin chào! 🦖 Rất vui được gặp bạn! Mình là AI hỗ trợ web game Khủng Long. Bạn có cần chia sẻ mẹo chơi game đạt điểm cao hay cần giúp đỡ điều gì không?",
-      "hits": 27,
+      "hits": 28,
       "tokensSavedPerHit": 60,
       "createdAt": "2026-11-07T19:17:36.045Z",
-      "lastHit": "2026-11-07T19:18:04.217Z"
+      "lastHit": "2026-11-07T19:51:45.980Z"
     }
   }
 }

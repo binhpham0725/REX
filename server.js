@@ -232,13 +232,22 @@ const server = http.createServer((req, res) => {
             try {
                 const payload = JSON.parse(body || '{}');
                 const model = payload.model || 'qwen-fast:latest';
-                const messages = payload.messages || [];
+                const rawMessages = payload.messages || [];
+                const think = payload.think === true; // Mặc định false để trả lời siêu nhanh trong vài giây
 
-                if (!Array.isArray(messages) || messages.length === 0) {
+                if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Thiếu mảng tin nhắn (messages)' }));
                     return;
                 }
+
+                // Tối ưu ngữ cảnh hội thoại: Giữ system prompt + 4 tin nhắn gần nhất để AI chạy siêu nhanh
+                const systemMsg = rawMessages.find(m => m.role === 'system') || {
+                    role: 'system',
+                    content: 'Bạn là T-Rex AI - một chú khủng long vui nhộn, thông minh tích hợp trên web game T-Rex Runner. Hãy trả lời ngắn gọn, thân thiện bằng tiếng Việt, đi thẳng vào câu hỏi.'
+                };
+                const userAssistantMsgs = rawMessages.filter(m => m.role !== 'system').slice(-4);
+                const optimizedMessages = [systemMsg, ...userAssistantMsgs];
 
                 // Cấu hình headers SSE cho streaming
                 res.writeHead(200, {
@@ -248,24 +257,25 @@ const server = http.createServer((req, res) => {
                     'X-Accel-Buffering': 'no'
                 });
 
-                // Sử dụng native fetch ổn định của Node.js
+                // Sử dụng native fetch gọi Ollama với think: false (hoặc true nếu người dùng bật)
                 const ollamaRes = await fetch('http://127.0.0.1:11434/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: model,
-                        messages: messages,
+                        messages: optimizedMessages,
                         stream: true,
+                        think: think, // THAM SỐ QUAN TRỌNG: tắt suy nghĩ để trả lời tức thì
                         options: {
-                            num_predict: 1024,
-                            temperature: 0.7
+                            num_predict: 512,
+                            temperature: 0.6
                         }
                     })
                 });
 
                 if (!ollamaRes.ok) {
                     const errText = await ollamaRes.text();
-                    res.write(`data: ${JSON.stringify({ error: `Ollama trả về lỗi HTTP ${ollamaRes.status}: ${errText}` })}\n\n`);
+                    res.write(`data: ${JSON.stringify({ error: `Ollama lỗi HTTP ${ollamaRes.status}: ${errText}` })}\n\n`);
                     res.write(`data: [DONE]\n\n`);
                     res.end();
                     return;
@@ -274,8 +284,6 @@ const server = http.createServer((req, res) => {
                 const reader = ollamaRes.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let buffer = '';
-                let accumulatedContent = '';
-                let accumulatedThinking = '';
 
                 while (true) {
                     const { value, done } = await reader.read();
@@ -288,15 +296,6 @@ const server = http.createServer((req, res) => {
                     for (const line of lines) {
                         const trimmed = line.trim();
                         if (trimmed) {
-                            try {
-                                const parsed = JSON.parse(trimmed);
-                                if (parsed.message?.content) {
-                                    accumulatedContent += parsed.message.content;
-                                }
-                                if (parsed.message?.thinking) {
-                                    accumulatedThinking += parsed.message.thinking;
-                                }
-                            } catch (e) {}
                             res.write(`data: ${trimmed}\n\n`);
                         }
                     }
@@ -304,21 +303,7 @@ const server = http.createServer((req, res) => {
 
                 // Xử lý nốt phần còn sót lại trong buffer
                 if (buffer.trim()) {
-                    try {
-                        const parsed = JSON.parse(buffer.trim());
-                        if (parsed.message?.content) accumulatedContent += parsed.message.content;
-                        if (parsed.message?.thinking) accumulatedThinking += parsed.message.thinking;
-                    } catch (e) {}
                     res.write(`data: ${buffer.trim()}\n\n`);
-                }
-
-                // BẢO HIỂM: Nếu content rỗng do model hết token suy nghĩ, lấy kết luận từ suy nghĩ gửi cho người dùng
-                if (!accumulatedContent.trim() && accumulatedThinking.trim()) {
-                    let fallbackAnswer = accumulatedThinking.trim();
-                    // Tìm dòng kết luận cuối cùng nếu có
-                    const match = fallbackAnswer.match(/(?:kết quả|đáp án|trả lời|kết luận|thực hiện)[:\s]+([^\n]+)/i);
-                    const cleanAnswer = match ? match[0] : fallbackAnswer.slice(-150);
-                    res.write(`data: ${JSON.stringify({ message: { role: 'assistant', content: `\n${cleanAnswer}` } })}\n\n`);
                 }
 
                 res.write(`data: [DONE]\n\n`);

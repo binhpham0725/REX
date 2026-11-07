@@ -10,10 +10,11 @@
         isOpen: false,
         selectedModel: 'qwen-fast:latest',
         availableModels: [],
+        think: false, // MẶC ĐỊNH FALSE ĐỂ TRẢ LỜI NGAY TRONG VÀI GIÂY, KHÔNG SUY NGHĨ NGÂM PHÚT
         messages: [
             {
                 role: 'system',
-                content: 'Bạn là T-Rex AI, một trợ lý thông minh và thân thiện được tích hợp trực tiếp trên web game Khủng Long (T-Rex Runner). Hãy trả lời bằng tiếng Việt tự nhiên, hữu ích, ngắn gọn và súc tích.'
+                content: 'Bạn là T-Rex AI - một chú khủng long vui nhộn, thông minh tích hợp trên web game T-Rex Runner. Hãy trả lời ngắn gọn, thân thiện bằng tiếng Việt, đi thẳng vào câu hỏi.'
             }
         ],
         isGenerating: false,
@@ -69,6 +70,10 @@
                     </div>
                 </div>
                 <div class="ai-header-actions">
+                    <button id="aiModeToggleBtn" class="ai-mode-toggle-btn fast" title="Chế độ phản hồi: Bấm để chuyển giữa Nhanh (vài giây) hoặc Suy nghĩ sâu">
+                        <span class="mode-icon">⚡</span>
+                        <span class="mode-text">Nhanh</span>
+                    </button>
                     <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑️</button>
                     <button id="aiCloseBtn" class="ai-icon-btn" title="Đóng khung chat">✕</button>
                 </div>
@@ -121,6 +126,23 @@
         // Bật/Tắt chat window
         fab.addEventListener('click', toggleChat);
         closeBtn.addEventListener('click', toggleChat);
+
+        // Bật/Tắt chế độ Nhanh vs Suy nghĩ sâu
+        const modeToggleBtn = document.getElementById('aiModeToggleBtn');
+        if (modeToggleBtn) {
+            modeToggleBtn.addEventListener('click', () => {
+                chatState.think = !chatState.think;
+                if (chatState.think) {
+                    modeToggleBtn.className = 'ai-mode-toggle-btn think';
+                    modeToggleBtn.innerHTML = '<span class="mode-icon">🧠</span> <span class="mode-text">Suy nghĩ</span>';
+                    appendSystemNotice('🧠 Đã bật chế độ <strong>Suy nghĩ sâu</strong> (phù hợp lập trình, toán học, giải đố phức tạp).');
+                } else {
+                    modeToggleBtn.className = 'ai-mode-toggle-btn fast';
+                    modeToggleBtn.innerHTML = '<span class="mode-icon">⚡</span> <span class="mode-text">Nhanh</span>';
+                    appendSystemNotice('⚡ Đã bật chế độ <strong>Trả lời nhanh</strong> (phản hồi trong 3-5 giây, không suy nghĩ lâu).');
+                }
+            });
+        }
 
         const openBarBtn = document.getElementById('openAiChatBtn');
         if (openBarBtn) {
@@ -296,12 +318,16 @@
         let fullThinking = '';
         let fullContent = '';
         let startTime = Date.now();
-        let thinkingTimerInterval = setInterval(() => {
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-            if (thinkingTimerElem) {
-                thinkingTimerElem.textContent = `Suy nghĩ trong ${elapsed}s`;
-            }
-        }, 100);
+        let thinkingTimerInterval = null;
+
+        if (chatState.think) {
+            thinkingTimerInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                if (thinkingTimerElem) {
+                    thinkingTimerElem.textContent = `Suy nghĩ trong ${elapsed}s`;
+                }
+            }, 100);
+        }
 
         try {
             const response = await fetch('/api/ai/chat', {
@@ -309,7 +335,8 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: chatState.selectedModel,
-                    messages: chatState.messages
+                    messages: chatState.messages,
+                    think: chatState.think
                 })
             });
 

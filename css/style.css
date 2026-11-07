@@ -994,7 +994,52 @@ body.night-theme .ai-chat-header {
 
 .ai-header-actions {
     display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ai-mode-toggle-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: var(--btn-bg);
+    color: var(--text-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
     gap: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.ai-mode-toggle-btn.fast {
+    background: rgba(15, 157, 88, 0.12);
+    border-color: #0f9d58;
+    color: #0f9d58;
+}
+
+body.night-theme .ai-mode-toggle-btn.fast {
+    background: rgba(15, 157, 88, 0.2);
+    color: #81c995;
+    border-color: #81c995;
+}
+
+.ai-mode-toggle-btn.think {
+    background: rgba(26, 115, 232, 0.12);
+    border-color: #1a73e8;
+    color: #1a73e8;
+}
+
+body.night-theme .ai-mode-toggle-btn.think {
+    background: rgba(138, 180, 248, 0.2);
+    color: #8ab4f8;
+    border-color: #8ab4f8;
+}
+
+.ai-mode-toggle-btn:hover {
+    transform: scale(1.04);
 }
 
 .ai-icon-btn {

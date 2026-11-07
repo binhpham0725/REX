@@ -56,15 +56,32 @@ export default async function handler(req, res) {
         const chatHistory = rawMessages.filter(m => m.role !== 'system').slice(-4);
         const messagesToSend = [systemMsg, ...chatHistory];
 
-        // Lấy địa chềEOllama
+        // Lấy địa chỉ Ollama
         const ollamaBaseUrl = req.headers['x-ollama-url'] || payload.ollamaUrl || DEFAULT_OLLAMA_URL;
+
+        // Xác định chính xác tên trang web đang gọi API để gửi về Controller theo dõi
+        let clientWebsite = req.headers['x-client-origin'] || req.headers['origin'] || '';
+        if (!clientWebsite && req.headers['referer']) {
+            try {
+                const u = new URL(req.headers['referer']);
+                clientWebsite = `${u.protocol}//${u.host}`;
+            } catch (e) {
+                clientWebsite = req.headers['referer'];
+            }
+        }
+        if (!clientWebsite) {
+            const host = req.headers['x-forwarded-host'] || req.headers['host'];
+            clientWebsite = host ? `https://${host}` : 'Web Game Vercel';
+        }
 
         // Gửi trực tiếp đến Ollama API
         const ollamaRes = await fetch(`${ollamaBaseUrl}/api/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': '1' // BềEqua trang cảnh báo của ngrok
+                'ngrok-skip-browser-warning': '1', // Bỏ qua trang cảnh báo của ngrok
+                'X-Client-Origin': clientWebsite,
+                'Referer': clientWebsite
             },
             body: JSON.stringify({
                 model: model,

@@ -5,6 +5,8 @@
 
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { exec, spawn } = require('child_process');
 const readline = require('readline');
 
@@ -21,14 +23,51 @@ const C = {
     red: '\x1b[31m',
     white: '\x1b[37m',
     bgBlue: '\x1b[44m',
-    bgGreen: '\x1b[42m'
+    bgGreen: '\x1b[42m',
+    bgYellow: '\x1b[43m',
+    bgCyan: '\x1b[46m'
 };
 
 const OLLAMA_PORT = 11434;
 const NGROK_API_PORT = 4040;
 
-// Bộ nhớ đệm thống kê traffic theo domain
-const trafficStats = new Map();
+// Đường dẫn file lưu trữ thống kê lưu lượng lâu dài
+const DATA_DIR = path.join(__dirname, 'data');
+const TRAFFIC_DB_FILE = path.join(DATA_DIR, 'web_traffic_stats.json');
+
+// Khởi tạo file database lưu lượng
+function initTrafficDb() {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(TRAFFIC_DB_FILE)) {
+        const initial = {
+            processedIds: {},
+            websites: {}
+        };
+        fs.writeFileSync(TRAFFIC_DB_FILE, JSON.stringify(initial, null, 2), 'utf8');
+        return initial;
+    }
+    try {
+        const data = fs.readFileSync(TRAFFIC_DB_FILE, 'utf8');
+        const parsed = JSON.parse(data);
+        if (!parsed.processedIds) parsed.processedIds = {};
+        if (!parsed.websites) parsed.websites = {};
+        return parsed;
+    } catch (e) {
+        return { processedIds: {}, websites: {} };
+    }
+}
+
+// Lưu database lưu lượng
+function saveTrafficDb(db) {
+    try {
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+        }
+        fs.writeFileSync(TRAFFIC_DB_FILE, JSON.stringify(db, null, 2), 'utf8');
+    } catch (e) {}
+}
 
 // Helper thực thi lệnh hệ thống trả về Promise
 function runCmd(cmd) {
@@ -132,9 +171,9 @@ async function printBanner() {
     // Status Ollama
     if (ollama.online) {
         const modelNames = ollama.models.map(m => m.name.split(':')[0]).join(', ') || 'Chưa nạp model';
-        console.log(`  🤖 ${C.bright}Ollama AI:${C.reset}  ${C.green}● ONLINE (Port ${OLLAMA_PORT})${C.reset} | Models: ${C.yellow}${modelNames}${C.reset}`);
+        console.log(`  🤖 ${C.bright}Ollama AI:${C.reset}    ${C.green}● ONLINE (Port ${OLLAMA_PORT})${C.reset} | Models: ${C.yellow}${modelNames}${C.reset}`);
     } else {
-        console.log(`  🤖 ${C.bright}Ollama AI:${C.reset}  ${C.red}○ OFFLINE${C.reset} (Chưa bật service)`);
+        console.log(`  🤖 ${C.bright}Ollama AI:${C.reset}    ${C.red}○ OFFLINE${C.reset} (Chưa bật service)`);
     }
 
     // Status Ngrok
@@ -339,27 +378,32 @@ async function handleExportAPI() {
     console.log(`${C.cyan}╚════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
 
     console.log(`📌 ${C.bright}API ENDPOINTS:${C.reset}`);
-    console.log(`   • Chat Completion API: ${C.yellow}${apiUrl}/api/chat${C.reset}`);
-    console.log(`   • Models List API:     ${C.yellow}${apiUrl}/api/tags${C.reset}`);
-    console.log(`   • Text Generation API: ${C.yellow}${apiUrl}/api/generate${C.reset}\n`);
+    console.log(`   • Chat Completion: ${C.yellow}${apiUrl}/api/chat${C.reset}`);
+    console.log(`   • Models List:     ${C.yellow}${apiUrl}/api/tags${C.reset}`);
+    console.log(`   • Text Generation: ${C.yellow}${apiUrl}/api/generate${C.reset}\n`);
 
-    console.log(`📌 ${C.bright}HEADERS BẮT BUỘC:${C.reset}`);
-    console.log(`   • Content-Type: ${C.cyan}application/json${C.reset}`);
-    console.log(`   • ngrok-skip-browser-warning: ${C.cyan}1${C.reset}  (Bỏ qua màn hình bảo vệ của ngrok)\n`);
+    console.log(`📌 ${C.bright}HEADERS KẾT NỐI:${C.reset}`);
+    console.log(`   • ${C.cyan}Content-Type:${C.reset} application/json`);
+    console.log(`   • ${C.cyan}ngrok-skip-browser-warning:${C.reset} 1  (Bỏ qua màn hình bảo vệ Ngrok)`);
+    console.log(`   • ${C.cyan}X-Client-Origin:${C.reset} Tên website của bạn (để bảng thống kê ghi nhận đúng tên web)\n`);
 
-    const jsCode = `// 1. Mã nguồn JavaScript (Dùng trên mọi Web / React / Vue / HTML)
+    const jsCode = `// 1. Mã nguồn JavaScript (Dùng trên mọi Web / React / Vue / HTML thuần)
 async function askAI(prompt) {
+    // Tự động lấy tên website hiện tại để xuất hiện trên Controller
+    const myWebsite = typeof window !== 'undefined' ? window.location.origin : 'My-Custom-Web';
+
     const response = await fetch("${apiUrl}/api/chat", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "1"
+            "ngrok-skip-browser-warning": "1",
+            "X-Client-Origin": myWebsite
         },
         body: JSON.stringify({
             model: "qwen-fast:latest",
             messages: [{ role: "user", content: prompt }],
             stream: false,
-            think: false // trả lời siêu tốc trong vài giây
+            think: false // Trả lời siêu tốc trong 1-3 giây
         })
     });
     const data = await response.json();
@@ -378,6 +422,7 @@ askAI("Chào bạn, bạn có thể giúp gì cho tôi?");`;
     const curlCode = `curl -X POST "${apiUrl}/api/chat" ^
   -H "Content-Type: application/json" ^
   -H "ngrok-skip-browser-warning: 1" ^
+  -H "X-Client-Origin: https://my-website.com" ^
   -d "{\\"model\\":\\"qwen-fast:latest\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"Xin chao!\\"}],\\"stream\\":false,\\"think\\":false}"`;
 
     console.log(`📡 ${C.bright}LỆNH TEST TRÊN TERMINAL (cURL):${C.reset}`);
@@ -392,90 +437,207 @@ askAI("Chào bạn, bạn có thể giúp gì cho tôi?");`;
 // -------------------------------------------------------------
 // [5] HIỂN THỊ TÊN WEB ĐANG DÙNG AI & MỨC ĐỘ SỬ DỤNG
 // -------------------------------------------------------------
-async function handleWebUsageStats() {
-    console.log(`\n${C.yellow}⏳ Đang quét và phân tích nhật ký lưu lượng truy cập từ các trang web...${C.reset}\n`);
+
+// Trích xuất định danh website chính xác từ HTTP Request
+function extractWebsiteIdentity(r) {
+    const headers = r.request?.headers || {};
+
+    // 1. Header do client hoặc Vercel gửi chủ động
+    let site = (headers['X-Client-Origin']?.[0] || headers['X-App-Name']?.[0] || '').trim();
+
+    // 2. Standard Origin header từ trình duyệt
+    if (!site && headers['Origin']?.[0]) {
+        site = headers['Origin'][0].trim();
+    }
+
+    // 3. Standard Referer header từ trình duyệt
+    if (!site && headers['Referer']?.[0]) {
+        try {
+            const u = new URL(headers['Referer'][0]);
+            site = `${u.protocol}//${u.host}`;
+        } catch (e) {
+            site = headers['Referer'][0];
+        }
+    }
+
+    // 4. Nếu là cuộc gọi từ Vercel Cloud Serverless Function
+    if (!site && (headers['X-Vercel-Id'] || headers['X-Invocation-Id'])) {
+        site = 'Web Game Vercel (binhpham0725/REX)';
+    }
+
+    // 5. Host Header (nếu không phải localhost)
+    if (!site && headers['Host']?.[0] && !headers['Host'][0].includes('localhost')) {
+        site = headers['Host'][0];
+    }
+
+    // 6. Nhận diện các Client khác
+    if (!site) {
+        const ua = (headers['User-Agent']?.[0] || '').toLowerCase();
+        if (ua.includes('curl')) {
+            site = 'cURL CLI / Terminal Client';
+        } else if (ua.includes('node')) {
+            site = 'Node.js Backend Client';
+        } else if (ua.includes('python')) {
+            site = 'Python Client Script';
+        } else if (ua.includes('postman')) {
+            site = 'Postman API Client';
+        } else {
+            site = 'Direct API Client';
+        }
+    }
+
+    return site;
+}
+
+// Tạo thanh đo trực quan mức độ sử dụng
+function generateUsageBar(percent) {
+    const totalBars = 10;
+    const filled = Math.min(totalBars, Math.max(0, Math.round(percent / 10)));
+    const empty = totalBars - filled;
+    return '█'.repeat(filled) + '░'.repeat(empty);
+}
+
+// Đồng bộ lưu lượng mới nhất từ Ngrok vào Database
+async function syncTrafficData() {
+    const db = initTrafficDb();
 
     try {
         const reqsData = await fetchJson(`http://127.0.0.1:${NGROK_API_PORT}/api/requests/http?limit=50`);
+        if (reqsData.requests && reqsData.requests.length > 0) {
+            reqsData.requests.forEach(r => {
+                const reqId = r.id;
+                // Nếu request này chưa từng được ghi nhận -> Ghi nhận và cộng dồn
+                if (!db.processedIds[reqId]) {
+                    db.processedIds[reqId] = r.start;
 
-        if (!reqsData.requests || reqsData.requests.length === 0) {
-            console.log(`${C.yellow}ℹ️ Hiện tại chưa có yêu cầu truy cập nào qua Ngrok Tunnel.${C.reset}`);
-            console.log(`💡 Khi bạn bè hoặc website (như Vercel) gọi AI, tên website sẽ tự động xuất hiện tại đây!\n`);
+                    const siteName = extractWebsiteIdentity(r);
+                    const isSuccess = r.response?.status_code === 200;
+                    const durationSec = r.duration ? r.duration / 1000000000 : 0;
+                    const endpoint = r.request?.uri || '/api/chat';
+
+                    if (!db.websites[siteName]) {
+                        db.websites[siteName] = {
+                            name: siteName,
+                            totalRequests: 0,
+                            successRequests: 0,
+                            totalDuration: 0,
+                            lastActive: r.start,
+                            endpoints: {},
+                            clientIps: []
+                        };
+                    }
+
+                    const site = db.websites[siteName];
+                    site.totalRequests++;
+                    if (isSuccess) site.successRequests++;
+                    site.totalDuration += durationSec;
+                    if (new Date(r.start) > new Date(site.lastActive)) {
+                        site.lastActive = r.start;
+                    }
+                    site.endpoints[endpoint] = (site.endpoints[endpoint] || 0) + 1;
+                    if (r.remote_addr && !site.clientIps.includes(r.remote_addr)) {
+                        site.clientIps.push(r.remote_addr);
+                    }
+                }
+            });
+
+            saveTrafficDb(db);
+        }
+    } catch (e) {
+        // Ngrok chưa bật hoặc lỗi kết nối
+    }
+
+    return db;
+}
+
+async function handleWebUsageStats(rl) {
+    while (true) {
+        console.clear();
+        console.log(`${C.cyan}╔════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
+        console.log(`${C.cyan}║${C.bright}${C.yellow}                  📊 THỐNG KÊ DANH SÁCH WEBSITE ĐANG SỬ DỤNG AI & MỨC ĐỘ                   ${C.reset}${C.cyan}║${C.reset}`);
+        console.log(`${C.cyan}╚════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+
+        const db = await syncTrafficData();
+        const siteList = Object.values(db.websites);
+
+        if (siteList.length === 0) {
+            console.log(`${C.yellow}ℹ️ Hiện tại chưa có lượt gọi nào từ các trang web qua Ngrok Tunnel.${C.reset}`);
+            console.log(`💡 Mọi trang web gọi vào AI qua link Ngrok (hoặc Web game Vercel) sẽ tự động hiện tại đây!\n`);
             return;
         }
 
-        // Cập nhật thống kê từ ngrok logs
-        reqsData.requests.forEach(r => {
-            const headers = r.request?.headers || {};
+        // Tính tổng lượt request toàn hệ thống
+        const totalAllRequests = siteList.reduce((sum, s) => sum + s.totalRequests, 0);
+        const totalSuccess = siteList.reduce((sum, s) => sum + s.successRequests, 0);
+        const overallSuccessRate = totalAllRequests > 0 ? ((totalSuccess / totalAllRequests) * 100).toFixed(0) : 100;
+
+        // Sắp xếp các website theo mức độ sử dụng (giảm dần)
+        siteList.sort((a, b) => b.totalRequests - a.totalRequests);
+        const topSite = siteList[0] ? siteList[0].name : 'Chưa có';
+
+        console.log(`${C.bright}📌 TỔNG QUAN HỆ THỐNG:${C.reset}`);
+        console.log(`   • Tổng số Website/Nguồn: ${C.cyan}${C.bright}${siteList.length} trang${C.reset}        • Tổng lượt gọi AI: ${C.green}${C.bright}${totalAllRequests} lượt${C.reset}`);
+        console.log(`   • Website sử dụng nhiều nhất: ${C.yellow}${C.bright}${topSite}${C.reset}`);
+        console.log(`   • Tỷ lệ phản hồi thành công: ${C.green}${C.bright}${overallSuccessRate}%${C.reset}\n`);
+
+        console.log(`┌────┬──────────────────────────────────────┬────────────────────────┬──────────┬──────────┬───────────┬──────────────┐`);
+        console.log(`│ ${C.bright}STT${C.reset}│ ${C.bright}TÊN WEBSITE / ỨNG DỤNG${C.reset}              │ ${C.bright}MỨC ĐỘ SỬ DỤNG${C.reset}         │ ${C.bright}SỐ LƯỢT${C.reset}  │ ${C.bright}T.CÔNG${C.reset}   │ ${C.bright}ĐỘ TRỄ TB${C.reset} │ ${C.bright}HOẠT ĐỘNG${C.reset}    │`);
+        console.log(`├────┼──────────────────────────────────────┼────────────────────────┼──────────┼──────────┼───────────┼──────────────┤`);
+
+        const now = Date.now();
+
+        siteList.forEach((site, idx) => {
+            const percent = totalAllRequests > 0 ? (site.totalRequests / totalAllRequests) * 100 : 0;
+            const bar = generateUsageBar(percent);
             
-            // Tìm nguồn gốc website
-            let origin = (headers['Origin']?.[0] || headers['Referer']?.[0] || '').trim();
-            if (!origin) {
-                if (headers['X-Vercel-Id']) {
-                    origin = 'https://rex-runner.vercel.app (Vercel Cloud)';
-                } else if (headers['User-Agent']?.[0]?.includes('curl')) {
-                    origin = 'cURL / Terminal Direct Client';
-                } else if (headers['User-Agent']?.[0]?.includes('node')) {
-                    origin = 'Node.js Backend / Server API';
-                } else {
-                    origin = headers['Host']?.[0] ? `Direct (${headers['Host'][0]})` : 'Direct API Call';
-                }
+            // Phân loại mức độ sử dụng
+            let levelTag = '';
+            let levelColor = C.green;
+            if (percent >= 50) {
+                levelTag = 'CAO';
+                levelColor = C.red;
+            } else if (percent >= 20) {
+                levelTag = 'VỪA';
+                levelColor = C.yellow;
+            } else {
+                levelTag = 'THẤP';
+                levelColor = C.green;
             }
 
-            // Làm sạch origin
-            try {
-                if (origin.startsWith('http')) {
-                    const u = new URL(origin);
-                    origin = `${u.protocol}//${u.host}`;
-                }
-            } catch (e) {}
+            const usageMeter = `[${levelColor}${bar}${C.reset}] ${percent.toFixed(1).padStart(5)}% ${levelColor}${levelTag.padEnd(4)}${C.reset}`;
+            const successRate = site.totalRequests > 0 ? ((site.successRequests / site.totalRequests) * 100).toFixed(0) + '%' : '100%';
+            const avgDur = site.totalRequests > 0 ? (site.totalDuration / site.totalRequests).toFixed(1) + 's' : '0.0s';
+            
+            const lastTime = new Date(site.lastActive);
+            const isRecent = (now - lastTime.getTime()) < 5 * 60 * 1000; // trong 5 phút gần đây
+            const activeStatus = isRecent ? `${C.green}🟢 ${lastTime.toLocaleTimeString('vi-VN')}${C.reset}` : `${C.dim}⚪ ${lastTime.toLocaleTimeString('vi-VN')}${C.reset}`;
 
-            const durationSec = r.duration ? r.duration / 1000000000 : 0;
-            const isSuccess = r.response?.status_code === 200;
-
-            if (!trafficStats.has(origin)) {
-                trafficStats.set(origin, {
-                    totalRequests: 0,
-                    successRequests: 0,
-                    totalDuration: 0,
-                    lastActive: new Date(r.start),
-                    clientIps: new Set()
-                });
+            let displayName = site.name;
+            if (displayName.length > 36) {
+                displayName = displayName.substring(0, 33) + '...';
             }
 
-            const stat = trafficStats.get(origin);
-            stat.totalRequests++;
-            if (isSuccess) stat.successRequests++;
-            stat.totalDuration += durationSec;
-            if (new Date(r.start) > stat.lastActive) {
-                stat.lastActive = new Date(r.start);
-            }
-            if (r.remote_addr) stat.clientIps.add(r.remote_addr);
+            const sttStr = String(idx + 1).padEnd(2);
+            const nameStr = displayName.padEnd(36);
+            const reqStr = `${site.totalRequests} reqs`.padEnd(8);
+            const succStr = successRate.padEnd(8);
+            const durStr = avgDur.padEnd(9);
+
+            console.log(`│ ${sttStr} │ ${C.bright}${nameStr}${C.reset} │ ${usageMeter} │ ${C.cyan}${reqStr}${C.reset} │ ${C.green}${succStr}${C.reset} │ ${durStr} │ ${activeStatus} │`);
         });
 
-        // In bảng thống kê
-        console.log(`${C.cyan}╔════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
-        console.log(`${C.cyan}║${C.bright}                    DANH SÁCH WEBSITE ĐANG SỬ DỤNG AI & LƯU LƯỢNG                   ${C.reset}${C.cyan}║${C.reset}`);
-        console.log(`${C.cyan}╚════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+        console.log(`└────┴──────────────────────────────────────┴────────────────────────┴──────────┴──────────┴───────────┴──────────────┘\n`);
 
-        console.log(` ${'STT'.padEnd(4)} | ${'TÊN WEBSITE / NGUỒN TRUY CẬP'.padEnd(38)} | ${'SỐ LƯỢT'.padEnd(8)} | ${'THÀNH CÔNG'.padEnd(10)} | ${'ĐỘ TRỄ TB'.padEnd(10)} | ${'LẦN CUỐI'}`);
-        console.log(` ${C.dim}────────────────────────────────────────────────────────────────────────────────────────────${C.reset}`);
+        console.log(`💡 ${C.dim}Giải thích mức độ: [██████████] là thanh đo phần trăm lưu lượng website đó chiếm trên tổng lượt gọi AI.${C.reset}`);
+        console.log(`💡 ${C.dim}Trạng thái: 🟢 Đang gọi trong 5 phút gần nhất | ⚪ Đã nghỉ${C.reset}\n`);
 
-        let idx = 1;
-        trafficStats.forEach((val, key) => {
-            const avgDur = val.totalRequests > 0 ? (val.totalDuration / val.totalRequests).toFixed(1) + 's' : '0s';
-            const rate = ((val.successRequests / val.totalRequests) * 100).toFixed(0) + '%';
-            const lastTime = val.lastActive.toLocaleTimeString('vi-VN');
-            const websiteName = key.length > 36 ? key.substring(0, 33) + '...' : key;
-
-            console.log(` ${String(idx++).padEnd(4)} | ${C.bright}${C.yellow}${websiteName.padEnd(38)}${C.reset} | ${C.cyan}${String(val.totalRequests).padEnd(8)}${C.reset} | ${C.green}${rate.padEnd(10)}${C.reset} | ${avgDur.padEnd(10)} | ${lastTime}`);
+        const ans = await new Promise((resolve) => {
+            rl.question(`👉 Nhấn ${C.yellow}[R]${C.reset} để Làm mới dữ liệu | Nhấn ${C.green}[Enter]${C.reset} để Quay lại Menu chính: `, resolve);
         });
 
-        console.log(` ${C.dim}────────────────────────────────────────────────────────────────────────────────────────────${C.reset}`);
-        console.log(`💡 ${C.dim}Mẹo: Mọi website nhúng API của bạn đều sẽ được tự động ghi nhận và phân tích tại đây!${C.reset}\n`);
-
-    } catch (e) {
-        console.log(`${C.red}⚠️ Không thể lấy thông tin lưu lượng từ Ngrok. Hãy chắc chắn Ngrok đang chạy!${C.reset}\n`);
+        if (ans.trim().toLowerCase() !== 'r') {
+            break;
+        }
     }
 }
 
@@ -543,8 +705,7 @@ async function main() {
                 await waitForEnter(rl);
                 break;
             case '5':
-                await handleWebUsageStats();
-                await waitForEnter(rl);
+                await handleWebUsageStats(rl);
                 break;
             case '6':
                 await handleExit(rl);

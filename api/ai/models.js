@@ -16,6 +16,21 @@ export default async function handler(req, res) {
     const customUrl = req.headers['x-ollama-url'] || req.query.url;
     const ollamaBaseUrl = customUrl || DEFAULT_OLLAMA_URL;
 
+    // Xác định tên trang web đang gọi
+    let clientWebsite = req.headers['x-client-origin'] || req.headers['origin'] || '';
+    if (!clientWebsite && req.headers['referer']) {
+        try {
+            const u = new URL(req.headers['referer']);
+            clientWebsite = `${u.protocol}//${u.host}`;
+        } catch (e) {
+            clientWebsite = req.headers['referer'];
+        }
+    }
+    if (!clientWebsite) {
+        const host = req.headers['x-forwarded-host'] || req.headers['host'];
+        clientWebsite = host ? `https://${host}` : 'Web Game Vercel';
+    }
+
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -23,7 +38,9 @@ export default async function handler(req, res) {
         const ollamaRes = await fetch(`${ollamaBaseUrl}/api/tags`, {
             method: 'GET',
             headers: {
-                'ngrok-skip-browser-warning': '1'
+                'ngrok-skip-browser-warning': '1',
+                'X-Client-Origin': clientWebsite,
+                'Referer': clientWebsite
             },
             signal: controller.signal
         });

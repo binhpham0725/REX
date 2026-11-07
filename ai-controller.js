@@ -83,6 +83,18 @@ function resetTrafficDb() {
     return fresh;
 }
 
+// Helper loại bỏ mã màu ANSI để tính toán độ dài ký tự hiển thị thực tế
+function stripAnsi(str) {
+    return String(str || '').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+}
+
+// Căn lề chuẩn xác dựa trên độ dài hiển thị thực tế (bỏ qua ký tự màu ANSI)
+function padAnsi(str, targetWidth) {
+    const visibleLen = stripAnsi(str).length;
+    const padding = Math.max(0, targetWidth - visibleLen);
+    return str + ' '.repeat(padding);
+}
+
 // Helper thực thi lệnh hệ thống trả về Promise
 function runCmd(cmd) {
     return new Promise((resolve) => {
@@ -101,7 +113,7 @@ function fetchJson(url, options = {}) {
         const req = client.request(url, {
             method: options.method || 'GET',
             headers: options.headers || {},
-            timeout: 4000
+            timeout: 5000
         }, (res) => {
             let data = '';
             res.on('data', chunk => { data += chunk; });
@@ -125,6 +137,19 @@ function fetchJson(url, options = {}) {
         }
         req.end();
     });
+}
+
+// Kích hoạt nạp sẵn Model vào VRAM vĩnh viễn (keep_alive: -1) để luôn phản hồi trong 1 giây
+async function warmUpOllama() {
+    try {
+        await fetchJson(`http://127.0.0.1:${OLLAMA_PORT}/api/generate`, {
+            method: 'POST',
+            body: {
+                model: 'qwen-fast:latest',
+                keep_alive: -1 // Giữ model trong VRAM vĩnh viễn
+            }
+        });
+    } catch (e) {}
 }
 
 // Kiểm tra trạng thái Ollama
@@ -230,6 +255,11 @@ async function handleStartAI() {
             const sizeGB = (m.size / (1024 * 1024 * 1024)).toFixed(2);
             console.log(`  ${idx + 1}. ${C.yellow}${m.name.padEnd(25)}${C.reset} | Size: ${sizeGB} GB | Quant: ${m.details?.quantization_level || 'N/A'}`);
         });
+
+        // Tự động nạp sẵn model qwen-fast vào VRAM vĩnh viễn
+        process.stdout.write(`\n🚀 Đang nạp sẵn mô hình vào VRAM để phản hồi siêu tốc... `);
+        await warmUpOllama();
+        console.log(`${C.green}Hoàn tất! Model luôn sẵn sàng trong 1 giây.${C.reset}`);
     } else {
         console.log(`\n${C.red}⚠️ Không thể khởi động Ollama tự động. Bạn vui lòng mở ứng dụng Ollama từ Start Menu!${C.reset}`);
     }
@@ -318,7 +348,7 @@ async function handleLiveDashboard() {
                 console.log(`   • Mô hình đang chạy trong RAM/VRAM:`);
                 psData.models.forEach(m => {
                     const vramMB = (m.size_vram / (1024 * 1024)).toFixed(0);
-                    console.log(`     -> ${C.magenta}${m.name}${C.reset} (VRAM: ${vramMB} MB, Hết hạn sau: ${m.expires_at ? new Date(m.expires_at).toLocaleTimeString() : 'N/A'})`);
+                    console.log(`     -> ${C.magenta}${m.name}${C.reset} (VRAM: ${vramMB} MB, Trạng thái: ${C.green}Đã ghim vĩnh viễn${C.reset})`);
                 });
             } else {
                 console.log(`   • Mô hình trong VRAM: ${C.dim}Chế độ chờ (Sleep/Idle)${C.reset}`);
@@ -354,8 +384,8 @@ async function handleLiveDashboard() {
                 console.log(`   ${C.dim}────────────────────────────────────────────────────────────────────${C.reset}`);
                 reqsData.requests.slice(0, 5).forEach(r => {
                     const time = new Date(r.start).toLocaleTimeString();
-                    const status = r.response?.status_code || '---';
-                    const statusColored = status === 200 ? `${C.green}200 OK${C.reset}` : `${C.red}${status}${C.reset}`;
+                    const status = r.response?.status_code || (r.response ? 'ERR' : 'IN_FLIGHT');
+                    const statusColored = status === 200 ? `${C.green}200 OK${C.reset}` : (status === 'IN_FLIGHT' ? `${C.yellow}Đang xử lý${C.reset}` : `${C.red}${status}${C.reset}`);
                     const dur = (r.duration / 1000000000).toFixed(2) + 's';
                     const ip = r.remote_addr || 'unknown';
                     const uri = (r.request?.method || 'GET') + ' ' + (r.request?.uri || '/');
@@ -417,7 +447,8 @@ async function askAI(prompt) {
             model: "qwen-fast:latest",
             messages: [{ role: "user", content: prompt }],
             stream: false,
-            think: false // Trả lời siêu tốc trong 1-3 giây
+            think: false, // Trả lời siêu tốc trong 1-2 giây
+            keep_alive: -1
         })
     });
     const data = await response.json();
@@ -437,7 +468,7 @@ askAI("Chào bạn, bạn có thể giúp gì cho tôi?");`;
   -H "Content-Type: application/json" ^
   -H "ngrok-skip-browser-warning: 1" ^
   -H "X-Client-Origin: https://my-website.com" ^
-  -d "{\\"model\\":\\"qwen-fast:latest\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"Xin chao!\\"}],\\"stream\\":false,\\"think\\":false}"`;
+  -d "{\\"model\\":\\"qwen-fast:latest\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"Xin chao!\\"}],\\"stream\\":false,\\"think\\":false,\\"keep_alive\\":-1}"`;
 
     console.log(`📡 ${C.bright}LỆNH TEST TRÊN TERMINAL (cURL):${C.reset}`);
     console.log(`${C.dim}────────────────────────────────────────────────────────────────────${C.reset}`);
@@ -526,10 +557,10 @@ function extractTokensFromResponse(r) {
     };
 }
 
-// Tạo thanh đo trực quan mức độ sử dụng
+// Tạo thanh đo trực quan mức độ sử dụng (7 ký tự)
 function generateUsageBar(percent) {
-    const totalBars = 10;
-    const filled = Math.min(totalBars, Math.max(0, Math.round(percent / 10)));
+    const totalBars = 7;
+    const filled = Math.min(totalBars, Math.max(0, Math.round((percent / 100) * totalBars)));
     const empty = totalBars - filled;
     return '█'.repeat(filled) + '░'.repeat(empty);
 }
@@ -537,6 +568,13 @@ function generateUsageBar(percent) {
 // Định dạng số có dấu phẩy ngăn cách hàng nghìn
 function formatNum(n) {
     return Number(n || 0).toLocaleString('en-US');
+}
+
+// Rút gọn số token: 1450 -> 1.5k
+function formatTokenShort(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n || 0);
 }
 
 // Đồng bộ lưu lượng mới nhất từ Ngrok vào Database
@@ -548,12 +586,19 @@ async function syncTrafficData() {
         if (reqsData.requests && reqsData.requests.length > 0) {
             reqsData.requests.forEach(r => {
                 const reqId = r.id;
-                // Nếu request này chưa từng được ghi nhận -> Ghi nhận và cộng dồn
+                const hasCompletedResponse = Boolean(r.response && r.response.status_code);
+
+                // Nếu request này chưa xong (đang stream dở) thì bỏ qua chưa chốt vào processedIds
+                if (!hasCompletedResponse) {
+                    return;
+                }
+
+                // Nếu request này chưa được ghi nhận vào database
                 if (!db.processedIds[reqId]) {
                     db.processedIds[reqId] = r.start;
 
                     const siteName = extractWebsiteIdentity(r);
-                    const isSuccess = r.response?.status_code === 200;
+                    const isSuccess = r.response.status_code === 200;
                     const durationSec = r.duration ? r.duration / 1000000000 : 0;
                     const endpoint = r.request?.uri || '/api/chat';
                     const tokens = extractTokensFromResponse(r);
@@ -602,7 +647,7 @@ async function syncTrafficData() {
                         site: siteName,
                         method: r.request?.method || 'POST',
                         uri: endpoint,
-                        status: r.response?.status_code || 0,
+                        status: r.response.status_code,
                         duration: durationSec,
                         promptTokens: tokens.promptTokens,
                         completionTokens: tokens.completionTokens,
@@ -647,6 +692,13 @@ async function handleWebUsageStats(rl) {
     process.stdout.write('\x1b[?25l');
     console.clear();
 
+    // Định nghĩa độ rộng cột chuẩn xác (Tổng chiều rộng: 101 ký tự)
+    const colWidths = [3, 21, 14, 6, 14, 5, 5, 8];
+
+    const tableTop = '┌' + colWidths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
+    const tableMid = '├' + colWidths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
+    const tableBot = '└' + colWidths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
+
     while (isRunning) {
         const db = await syncTrafficData();
         const siteList = Object.values(db.websites);
@@ -657,16 +709,16 @@ async function handleWebUsageStats(rl) {
         // Di chuyển con trỏ về góc trên cùng bên trái [H] và ghi đè từng dòng [K]
         let out = '\x1b[H';
 
-        out += `${C.cyan}╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}\x1b[K\n`;
-        out += `${C.cyan}║${C.bright}${C.yellow}                 🦖 T-REX AI - REAL-TIME WEB USAGE & TOKEN MONITOR (TỰ ĐỘNG CẬP NHẬT 1.0s)                            ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
-        out += `${C.cyan}║${C.dim}                                Nhấn phím [Q] hoặc [ESC] hoặc [Enter] để quay lại Menu                                  ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
-        out += `${C.cyan}╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\x1b[K\n`;
+        out += `${C.cyan}╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}\x1b[K\n`;
+        out += `${C.cyan}║${C.bright}${C.yellow}                 🦖 T-REX AI - REAL-TIME WEB USAGE & TOKEN MONITOR (TỰ ĐỘNG CẬP NHẬT 1.0s)                 ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
+        out += `${C.cyan}║${C.dim}                                Bấm [Q] hoặc [ESC] hoặc [Enter] để quay lại Menu                            ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
+        out += `${C.cyan}╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\x1b[K\n`;
 
         if (siteList.length === 0) {
             out += `\n${C.yellow}  ℹ️ Hiện tại chưa ghi nhận yêu cầu truy cập nào qua Ngrok Tunnel.${C.reset}\x1b[K\n`;
             out += `  💡 Khi bất kỳ website nào (hoặc Web game Vercel) gửi prompt đến AI, dữ liệu sẽ lập tức nhảy tại đây!\x1b[K\n`;
             out += `\n  ${C.dim}Đang chờ kết nối... (Làm mới lúc: ${timeStr} | Bấm Q để quay lại Menu)${C.reset}\x1b[K\n`;
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 12; i++) {
                 out += `\x1b[K\n`;
             }
             process.stdout.write(out);
@@ -691,19 +743,37 @@ async function handleWebUsageStats(rl) {
         // Sắp xếp các website theo số lượt requests giảm dần
         siteList.sort((a, b) => b.totalRequests - a.totalRequests);
         const topSite = siteList[0] ? siteList[0].name : 'Chưa có';
+        const topSiteClean = topSite.replace(/^https?:\/\//, '');
+        const topSiteShort = topSiteClean.length > 30 ? topSiteClean.substring(0, 27) + '...' : topSiteClean;
 
         // Khối KPI Tổng Quan
         out += `${C.bright}📌 TỔNG QUAN HỆ THỐNG TOÀN CẦU:${C.reset}\x1b[K\n`;
-        out += `   • ${C.bright}Tổng số Website/Client:${C.reset} ${C.cyan}${C.bright}${siteList.length} nguồn${C.reset}             • ${C.bright}Tổng số Requests:${C.reset} ${C.green}${C.bright}${formatNum(totalAllRequests)} reqs${C.reset} (T.Công: ${C.green}${overallSuccessRate}%${C.reset} | Lỗi: ${C.red}${totalErrors}${C.reset})\x1b[K\n`;
-        out += `   • ${C.bright}Tổng Tokens tiêu thụ:${C.reset}    ${C.yellow}${C.bright}${formatNum(totalAllTokens)} Tokens${C.reset}       • ${C.bright}Cấu trúc Tokens:${C.reset}  In: ${C.cyan}${formatNum(totalPromptTokens)}${C.reset} (${totalAllTokens > 0 ? Math.round((totalPromptTokens/totalAllTokens)*100) : 0}%) | Out: ${C.magenta}${formatNum(totalCompletionTokens)}${C.reset} (${totalAllTokens > 0 ? Math.round((totalCompletionTokens/totalAllTokens)*100) : 0}%)\x1b[K\n`;
-        out += `   • ${C.bright}Nguồn dùng nhiều nhất:${C.reset}   ${C.yellow}${C.bright}${topSite}${C.reset}\x1b[K\n`;
-        out += `   • ${C.bright}Tốc độ xử lý AI TB:${C.reset}      ${C.cyan}${avgSpeed} tokens/giây${C.reset}        • ${C.bright}Độ trễ trung bình:${C.reset} ${C.green}${avgLatencyAll}${C.reset} | Live: ${C.green}● ${timeStr}${C.reset}\x1b[K\n`;
+        out += `   • ${C.bright}Tổng Websites:${C.reset} ${C.cyan}${siteList.length} nguồn${C.reset}   • ${C.bright}Tổng Reqs:${C.reset} ${C.green}${formatNum(totalAllRequests)} reqs${C.reset} (T.Công: ${C.green}${overallSuccessRate}%${C.reset} | Lỗi: ${C.red}${totalErrors}${C.reset})\x1b[K\n`;
+        out += `   • ${C.bright}Tổng Tokens:${C.reset}   ${C.yellow}${formatNum(totalAllTokens)} Tokens${C.reset}  (In: ${C.cyan}${formatNum(totalPromptTokens)}${C.reset} | Out: ${C.magenta}${formatNum(totalCompletionTokens)}${C.reset})\x1b[K\n`;
+        out += `   • ${C.bright}Nguồn Top 1:${C.reset}   ${C.yellow}${topSiteShort}${C.reset}\x1b[K\n`;
+        out += `   • ${C.bright}Tốc độ AI:${C.reset}     ${C.cyan}${avgSpeed} tokens/s${C.reset}   • ${C.bright}Độ trễ TB:${C.reset} ${C.green}${avgLatencyAll}${C.reset} | Live: ${C.green}● ${timeStr}${C.reset}\x1b[K\n`;
         out += `\x1b[K\n`;
 
-        // Bảng chi tiết từng Website
-        out += `┌────┬──────────────────────────────────────┬────────────────────────┬──────────┬────────────────────────────┬──────────┬───────────┬──────────────┐\x1b[K\n`;
-        out += `│ ${C.bright}STT${C.reset}│ ${C.bright}TÊN WEBSITE / NGUỒN TRUY CẬP${C.reset}         │ ${C.bright}MỨC ĐỘ SỬ DỤNG${C.reset}         │ ${C.bright}SỐ REQS${C.reset}  │ ${C.bright}SỐ TOKEN TIÊU THỤ (IN/OUT)${C.reset}  │ ${C.bright}T.CÔNG${C.reset}   │ ${C.bright}ĐỘ TRỄ TB${C.reset} │ ${C.bright}HOẠT ĐỘNG${C.reset}    │\x1b[K\n`;
-        out += `├────┼──────────────────────────────────────┼────────────────────────┼──────────┼────────────────────────────┼──────────┼───────────┼──────────────┤\x1b[K\n`;
+        // Bảng chi tiết từng Website (Độ rộng chuẩn 101 ký tự - Căn chỉnh hoàn hảo không bao giờ rớt dòng!)
+        out += `${tableTop}\x1b[K\n`;
+        
+        // In Dòng Header
+        const headerCols = [
+            `${C.bright}STT${C.reset}`,
+            `${C.bright}TÊN WEBSITE / NGUỒN${C.reset}`,
+            `${C.bright}MỨC ĐỘ SỬ DỤNG${C.reset}`,
+            `${C.bright}SỐ REQ${C.reset}`,
+            `${C.bright}TOKENS (IN/OUT)${C.reset}`,
+            `${C.bright}T.CÔNG${C.reset}`,
+            `${C.bright}ĐỘ TRỄ${C.reset}`,
+            `${C.bright}HOẠT ĐỘNG${C.reset}`
+        ];
+        let headerRow = '│';
+        headerCols.forEach((col, i) => {
+            headerRow += ' ' + padAnsi(col, colWidths[i]) + ' │';
+        });
+        out += `${headerRow}\x1b[K\n`;
+        out += `${tableMid}\x1b[K\n`;
 
         siteList.forEach((site, idx) => {
             const percent = totalAllRequests > 0 ? (site.totalRequests / totalAllRequests) * 100 : 0;
@@ -722,53 +792,69 @@ async function handleWebUsageStats(rl) {
                 levelColor = C.green;
             }
 
-            const usageMeter = `[${levelColor}${bar}${C.reset}] ${percent.toFixed(1).padStart(5)}% ${levelColor}${levelTag.padEnd(4)}${C.reset}`;
-            const successRate = site.totalRequests > 0 ? ((site.successRequests / site.totalRequests) * 100).toFixed(0) + '%' : '100%';
+            const usageMeter = `[${levelColor}${bar}${C.reset}] ${Math.round(percent).toString().padStart(2)}% ${levelColor}${levelTag.padEnd(4)}${C.reset}`;
+            const successRate = site.totalRequests > 0 ? Math.round((site.successRequests / site.totalRequests) * 100) + '%' : '100%';
             const avgDur = site.totalRequests > 0 ? (site.totalDuration / site.totalRequests).toFixed(1) + 's' : '0.0s';
 
             const lastTime = new Date(site.lastActive);
             const isRecent = (now - lastTime.getTime()) < 5 * 60 * 1000;
-            const activeStatus = isRecent ? `${C.green}🟢 ${lastTime.toLocaleTimeString('vi-VN')}${C.reset}` : `${C.dim}⚪ ${lastTime.toLocaleTimeString('vi-VN')}${C.reset}`;
+            const timeOnly = lastTime.toTimeString().split(' ')[0].substring(0, 5); // 01:40
+            const activeStatus = isRecent ? `${C.green}🟢 ${timeOnly}${C.reset}` : `${C.dim}⚪ ${timeOnly}${C.reset}`;
 
             let displayName = site.name;
-            if (displayName.length > 36) {
-                displayName = displayName.substring(0, 33) + '...';
+            // Làm gọn tên website cho đẹp
+            displayName = displayName.replace(/^https?:\/\//, '');
+            if (displayName.length > colWidths[1]) {
+                displayName = displayName.substring(0, colWidths[1] - 3) + '...';
             }
 
-            // Định dạng chuỗi Tokens (Ví dụ: 1,450 (1.1k/350))
-            const promptK = site.promptTokens >= 1000 ? (site.promptTokens / 1000).toFixed(1) + 'k' : String(site.promptTokens);
-            const compK = site.completionTokens >= 1000 ? (site.completionTokens / 1000).toFixed(1) + 'k' : String(site.completionTokens);
-            const tokenStr = `${formatNum(site.totalTokens)} (${promptK}/${compK})`.padEnd(26);
+            // Chuỗi Tokens gọn gàng (Ví dụ: 4.3k (3k/1.3k))
+            const totalTokStr = formatTokenShort(site.totalTokens);
+            const pTokStr = formatTokenShort(site.promptTokens);
+            const cTokStr = formatTokenShort(site.completionTokens);
+            const tokenStr = `${totalTokStr} (${pTokStr}/${cTokStr})`;
 
-            const sttStr = String(idx + 1).padEnd(2);
-            const nameStr = displayName.padEnd(36);
-            const reqStr = `${site.totalRequests} reqs`.padEnd(8);
-            const succStr = successRate.padEnd(8);
-            const durStr = avgDur.padEnd(9);
+            const rowCols = [
+                String(idx + 1),
+                `${C.bright}${displayName}${C.reset}`,
+                usageMeter,
+                `${C.cyan}${site.totalRequests} req${C.reset}`,
+                `${C.yellow}${tokenStr}${C.reset}`,
+                `${C.green}${successRate}${C.reset}`,
+                avgDur,
+                activeStatus
+            ];
 
-            out += `│ ${sttStr} │ ${C.bright}${nameStr}${C.reset} │ ${usageMeter} │ ${C.cyan}${reqStr}${C.reset} │ ${C.yellow}${tokenStr}${C.reset} │ ${C.green}${succStr}${C.reset} │ ${durStr} │ ${activeStatus} │\x1b[K\n`;
+            let rowStr = '│';
+            rowCols.forEach((col, i) => {
+                rowStr += ' ' + padAnsi(col, colWidths[i]) + ' │';
+            });
+            out += `${rowStr}\x1b[K\n`;
         });
 
-        out += `└────┴──────────────────────────────────────┴────────────────────────┴──────────┴────────────────────────────┴──────────┴───────────┴──────────────┘\x1b[K\n`;
+        out += `${tableBot}\x1b[K\n`;
 
         // Live Audit Log: 4 Request gần đây nhất
         out += `${C.bright}📡 NHẬT KÝ 4 YÊU CẦU MỚI NHẤT (LIVE AUDIT FEED):${C.reset}\x1b[K\n`;
         if (db.recentAudit && db.recentAudit.length > 0) {
             db.recentAudit.slice(0, 4).forEach(r => {
                 const time = new Date(r.time).toLocaleTimeString('vi-VN');
-                const site = r.site.length > 25 ? r.site.substring(0, 22) + '...' : r.site.padEnd(25);
+                let site = r.site.replace(/^https?:\/\//, '');
+                if (site.length > 22) site = site.substring(0, 19) + '...';
+                site = site.padEnd(22);
+
                 const statusStr = r.status === 200 ? `${C.green}200 OK${C.reset}` : `${C.red}${r.status || 'ERR'}${C.reset}`;
                 const dur = r.duration.toFixed(2) + 's';
-                const tokenStr = r.totalTokens > 0 ? `${C.yellow}${r.totalTokens} Tokens${C.reset} (In: ${r.promptTokens}, Out: ${r.completionTokens})` : `${C.dim}0 Tokens${C.reset}`;
-                out += `   • ${C.dim}${time}${C.reset} │ ${C.cyan}${site}${C.reset} │ ${r.method.padEnd(4)} ${r.uri.padEnd(12)} │ ${statusStr} │ ${tokenStr.padEnd(35)} │ ${dur}\x1b[K\n`;
+                const tokenStr = r.totalTokens > 0 ? `${C.yellow}${formatNum(r.totalTokens)} Toks${C.reset} (In: ${r.promptTokens}, Out: ${r.completionTokens})` : `${C.dim}0 Tokens${C.reset}`;
+                out += `   • ${C.dim}${time}${C.reset} │ ${C.cyan}${site}${C.reset} │ ${r.method.padEnd(4)} │ ${statusStr} │ ${tokenStr.padEnd(32)} │ ${dur}\x1b[K\n`;
             });
         } else {
             out += `   ${C.dim}Chưa có dữ liệu nhật ký mới.${C.reset}\x1b[K\n`;
         }
 
         out += `\x1b[K\n`;
-        out += `💡 ${C.dim}Phím điều khiển: [Q] hoặc [ESC] hoặc [Enter] để Quay lại Menu | [C] Xóa sạch dữ liệu thống kê${C.reset}\x1b[K\n`;
-        out += `💡 ${C.dim}Màn hình cập nhật liên tục 1.0 giây hoàn toàn không nháy màn (Flicker-Free In-Place Rendering).${C.reset}\x1b[K\n`;
+        out += `💡 ${C.dim}Phím: [Q] hoặc [ESC] hoặc [Enter] để Quay lại Menu | [C] Xóa sạch dữ liệu thống kê${C.reset}\x1b[K\n`;
+        out += `💡 ${C.dim}Màn hình cập nhật liên tục 1.0 giây hoàn toàn không nháy màn (Flicker-Free).${C.reset}\x1b[K\n`;
 
         // Ghi toàn bộ buffer ra terminal một lần duy nhất
         process.stdout.write(out);
@@ -810,6 +896,9 @@ async function handleExit(rl) {
 // VÒNG LẶP MENU CHÍNH
 // -------------------------------------------------------------
 async function main() {
+    // Tự động ghim model vào VRAM khi khởi động
+    warmUpOllama();
+
     readline.emitKeypressEvents(process.stdin);
     const rl = readline.createInterface({
         input: process.stdin,

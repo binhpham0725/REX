@@ -88,8 +88,9 @@ export default async function handler(req, res) {
                 messages: messagesToSend,
                 stream: true,
                 think: think,
+                keep_alive: -1, // Luôn giữ model trong VRAM vĩnh viễn, không bị nguội gây chậm/timeout
                 options: {
-                    num_predict: 512,
+                    num_predict: 384,
                     temperature: 0.7
                 }
             })

@@ -266,8 +266,9 @@ const server = http.createServer((req, res) => {
                         messages: optimizedMessages,
                         stream: true,
                         think: think, // THAM SỐ QUAN TRỌNG: tắt suy nghĩ để trả lời tức thì
+                        keep_alive: -1, // Giữ model trong VRAM vĩnh viễn
                         options: {
-                            num_predict: 512,
+                            num_predict: 384,
                             temperature: 0.6
                         }
                     })

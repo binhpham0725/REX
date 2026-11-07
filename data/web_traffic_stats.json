@@ -1,5 +1,8 @@
 {
   "processedIds": {
+    "airt_3Ln53EJ0qpaNhZhgbU1g3UFVbaX": "2026-11-08T01:39:49+07:00",
+    "airt_3Ln4px8rvmnrGqZmwJXoLZxoBnA": "2026-11-08T01:38:04+07:00",
+    "airt_3Ln4puU7UL9RRlHC4BqAdKFAosX": "2026-11-08T01:38:03+07:00",
     "airt_3Ln4EVXVJYpnFT3a2wokDHmSrzL": "2026-11-08T01:33:06+07:00",
     "airt_3Ln4A6aXtLnpBrcHXHO5VQ8lBjJ": "2026-11-08T01:32:31+07:00",
     "airt_3Ln44z4zHCBS3yu5cs6AfJgBTbx": "2026-11-08T01:31:50+07:00",
@@ -32,19 +35,38 @@
   "websites": {
     "https://rex-nu-ten.vercel.app": {
       "name": "https://rex-nu-ten.vercel.app",
-      "totalRequests": 3,
-      "successRequests": 3,
+      "totalRequests": 4,
+      "successRequests": 4,
       "errorRequests": 0,
-      "promptTokens": 912,
-      "completionTokens": 173,
-      "totalTokens": 1085,
-      "totalDuration": 35.3006449,
-      "lastActive": "2026-11-08T01:33:06+07:00",
+      "promptTokens": 1100,
+      "completionTokens": 243,
+      "totalTokens": 1343,
+      "totalDuration": 55.401411800000005,
+      "lastActive": "2026-11-08T01:39:49+07:00",
       "endpoints": {
-        "/api/chat": 3
+        "/api/chat": 4
       },
       "clientIps": [
+        "44.211.144.203",
         "98.87.161.141"
+      ]
+    },
+    "https://rex-rc88nxgqh-binhpham0725s-projects.vercel.app": {
+      "name": "https://rex-rc88nxgqh-binhpham0725s-projects.vercel.app",
+      "totalRequests": 2,
+      "successRequests": 2,
+      "errorRequests": 0,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "totalDuration": 0.0481773,
+      "lastActive": "2026-11-08T01:38:04+07:00",
+      "endpoints": {
+        "/api/tags": 2
+      },
+      "clientIps": [
+        "54.175.3.162",
+        "32.192.77.134"
       ]
     },
     "https://rex-iqegpgg55-binhpham0725s-projects.vercel.app": {

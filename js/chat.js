@@ -85,7 +85,7 @@
                         <span class="mode-text">Nhanh</span>
                     </button>
                     <button id="aiSettingsBtn" class="ai-icon-btn" title="Cài đặt kết nối AI (Vercel Cloud / Ngrok Tunnel)">⚙︁E/button>
-                    <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑�E�E/button>
+                    <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑�E�E/button>
                     <button id="aiCloseBtn" class="ai-icon-btn" title="Đóng khung chat">✁E/button>
                 </div>
             </div>
@@ -120,7 +120,7 @@
                         <p>Bạn có thềEhỏi mình mọi thứ: mẹo chơi game Khủng Long đạt điểm cao, lập trình, giải toán hay tâm sự vui vẻ!</p>
                         <div class="quick-prompts-wrapper">
                             <button class="quick-prompt-btn" data-prompt="Làm sao đềEchơi game Khủng Long đạt điểm kỷ lục trên 1000 điểm?">🎮 Mẹo đạt 1000+ điểm?</button>
-                            <button class="quick-prompt-btn" data-prompt="KềEmột câu chuyện cười ngắn vui vẻ">�E KềEchuyện cười</button>
+                            <button class="quick-prompt-btn" data-prompt="KềEmột câu chuyện cười ngắn vui vẻ">�E KềEchuyện cười</button>
                             <button class="quick-prompt-btn" data-prompt="Bạn đang chạy bằng model AI nào trên máy tôi?">💻 Giới thiệu vềEbạn</button>
                         </div>
                     </div>
@@ -512,14 +512,7 @@
         } catch (err) {
             console.error('[Chat Error]', err);
             contentElem.innerHTML = `
-                <div class="ai-error-box">
-                    <p><strong>⚠�E�E${err.message}</strong></p>
-                    <p style="margin-top: 6px; font-size: 11.5px; opacity: 0.9;">
-                        💡 <strong>Khắc phục:</strong><br>
-                        1. Đảm bảo bạn đang mềEgame bằng liên kết: <a href="http://localhost:8080/" style="color:#1a73e8;text-decoration:underline;font-weight:bold;">http://localhost:8080/</a><br>
-                        2. Đảm bảo ứng dụng <strong>Ollama</strong> đang chạy trên máy và đã chạy <code>node server.js</code>.
-                    </p>
-                </div>
+                <div class="ai-error-box"><p><strong>⚠️ ${err.message}</strong></p><p style="margin-top: 6px; font-size: 11.5px; opacity: 0.9;">💡 <strong>Khắc phục:</strong><br>1. Đảm bảo ứng dụng <strong>Ollama</strong> và đường hầm <strong>Ngrok / AI Controller</strong> đang hoạt động.<br>2. Thử bấm gửi lại câu hỏi.</p></div>
             `;
         } finally {
             if (thinkingTimerInterval) clearInterval(thinkingTimerInterval);

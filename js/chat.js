@@ -30,6 +30,16 @@
         fetchModels();
     }
 
+    // 0. Xác định địa chỉ API Server thông minh (hỗ trợ cả khi mở bằng file://, cổng khác, hoặc GitHub Pages)
+    function getApiEndpoint(endpointPath) {
+        // Nếu trang web đang chạy trên đúng server Node.js (cổng 8080)
+        if (window.location.protocol.startsWith('http') && window.location.port === '8080') {
+            return endpointPath;
+        }
+        // Nếu mở từ file://, cổng 8000, 5500 (Live Server) hoặc GitHub Pages: Trỏ về server Node.js cục bộ
+        return 'http://localhost:8080' + endpointPath;
+    }
+
     // 1. Tạo giao diện HTML cho Nút mở chat và Cửa sổ chat
     function renderChatHTML() {
         // Nút mở chat dạng Floating Action Button (FAB)
@@ -238,7 +248,7 @@
         const statusBadge = document.getElementById('aiStatusBadge');
 
         try {
-            const res = await fetch('/api/ai/models');
+            const res = await fetch(getApiEndpoint('/api/ai/models'));
             const data = await res.json();
 
             if (data.success && Array.isArray(data.models) && data.models.length > 0) {
@@ -330,7 +340,8 @@
         }
 
         try {
-            const response = await fetch('/api/ai/chat', {
+            const apiUrl = getApiEndpoint('/api/ai/chat');
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -341,6 +352,9 @@
             });
 
             if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error(`HTTP 404 (Không tìm thấy endpoint API). Vui lòng đảm bảo bạn đang mở web tại địa chỉ http://localhost:8080/ và đã chạy "node server.js"!`);
+                }
                 throw new Error(`HTTP error ${response.status}`);
             }
 
@@ -416,7 +430,16 @@
 
         } catch (err) {
             console.error('[Chat Error]', err);
-            contentElem.innerHTML = `<span class="ai-error-text">⚠️ Lỗi: Không thể nhận phản hồi từ AI (${err.message}). Vui lòng đảm bảo Ollama đang chạy trên máy!</span>`;
+            contentElem.innerHTML = `
+                <div class="ai-error-box">
+                    <p><strong>⚠️ ${err.message}</strong></p>
+                    <p style="margin-top: 6px; font-size: 11.5px; opacity: 0.9;">
+                        💡 <strong>Khắc phục:</strong><br>
+                        1. Đảm bảo bạn đang mở game bằng liên kết: <a href="http://localhost:8080/" style="color:#1a73e8;text-decoration:underline;font-weight:bold;">http://localhost:8080/</a><br>
+                        2. Đảm bảo ứng dụng <strong>Ollama</strong> đang chạy trên máy và đã chạy <code>node server.js</code>.
+                    </p>
+                </div>
+            `;
         } finally {
             if (thinkingTimerInterval) clearInterval(thinkingTimerInterval);
             chatState.isGenerating = false;

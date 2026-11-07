@@ -25,13 +25,14 @@ const C = {
     bgBlue: '\x1b[44m',
     bgGreen: '\x1b[42m',
     bgYellow: '\x1b[43m',
-    bgCyan: '\x1b[46m'
+    bgCyan: '\x1b[46m',
+    bgMagenta: '\x1b[45m'
 };
 
 const OLLAMA_PORT = 11434;
 const NGROK_API_PORT = 4040;
 
-// Đường dẫn file lưu trữ thống kê lưu lượng lâu dài
+// Đường dẫn file lưu trữ dữ liệu thống kê lâu dài
 const DATA_DIR = path.join(__dirname, 'data');
 const TRAFFIC_DB_FILE = path.join(DATA_DIR, 'web_traffic_stats.json');
 
@@ -43,7 +44,8 @@ function initTrafficDb() {
     if (!fs.existsSync(TRAFFIC_DB_FILE)) {
         const initial = {
             processedIds: {},
-            websites: {}
+            websites: {},
+            recentAudit: []
         };
         fs.writeFileSync(TRAFFIC_DB_FILE, JSON.stringify(initial, null, 2), 'utf8');
         return initial;
@@ -53,9 +55,10 @@ function initTrafficDb() {
         const parsed = JSON.parse(data);
         if (!parsed.processedIds) parsed.processedIds = {};
         if (!parsed.websites) parsed.websites = {};
+        if (!parsed.recentAudit) parsed.recentAudit = [];
         return parsed;
     } catch (e) {
-        return { processedIds: {}, websites: {} };
+        return { processedIds: {}, websites: {}, recentAudit: [] };
     }
 }
 
@@ -67,6 +70,17 @@ function saveTrafficDb(db) {
         }
         fs.writeFileSync(TRAFFIC_DB_FILE, JSON.stringify(db, null, 2), 'utf8');
     } catch (e) {}
+}
+
+// Xóa sạch lịch sử thống kê
+function resetTrafficDb() {
+    const fresh = {
+        processedIds: {},
+        websites: {},
+        recentAudit: []
+    };
+    saveTrafficDb(fresh);
+    return fresh;
 }
 
 // Helper thực thi lệnh hệ thống trả về Promise
@@ -435,7 +449,8 @@ askAI("Chào bạn, bạn có thể giúp gì cho tôi?");`;
 }
 
 // -------------------------------------------------------------
-// [5] HIỂN THỊ TÊN WEB ĐANG DÙNG AI & MỨC ĐỘ SỬ DỤNG
+// [5] HIỂN THỊ TÊN WEB ĐANG DÙNG AI, SỐ REQS & TOKENS
+// CẬP NHẬT LIÊN TỤC MÀ KHÔNG NHÁY MÀN (FLICKER-FREE LIVE MONITOR)
 // -------------------------------------------------------------
 
 // Trích xuất định danh website chính xác từ HTTP Request
@@ -489,12 +504,39 @@ function extractWebsiteIdentity(r) {
     return site;
 }
 
+// Trích xuất số token thực tế từ phản hồi Ollama
+function extractTokensFromResponse(r) {
+    let promptTokens = 0;
+    let completionTokens = 0;
+
+    if (r.response && r.response.raw) {
+        try {
+            const rawStr = Buffer.from(r.response.raw, 'base64').toString('utf8');
+            const promptMatch = rawStr.match(/"prompt_eval_count":\s*(\d+)/);
+            const evalMatch = rawStr.match(/"eval_count":\s*(\d+)/);
+            if (promptMatch) promptTokens = parseInt(promptMatch[1], 10);
+            if (evalMatch) completionTokens = parseInt(evalMatch[1], 10);
+        } catch (e) {}
+    }
+
+    return {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens
+    };
+}
+
 // Tạo thanh đo trực quan mức độ sử dụng
 function generateUsageBar(percent) {
     const totalBars = 10;
     const filled = Math.min(totalBars, Math.max(0, Math.round(percent / 10)));
     const empty = totalBars - filled;
     return '█'.repeat(filled) + '░'.repeat(empty);
+}
+
+// Định dạng số có dấu phẩy ngăn cách hàng nghìn
+function formatNum(n) {
+    return Number(n || 0).toLocaleString('en-US');
 }
 
 // Đồng bộ lưu lượng mới nhất từ Ngrok vào Database
@@ -514,12 +556,17 @@ async function syncTrafficData() {
                     const isSuccess = r.response?.status_code === 200;
                     const durationSec = r.duration ? r.duration / 1000000000 : 0;
                     const endpoint = r.request?.uri || '/api/chat';
+                    const tokens = extractTokensFromResponse(r);
 
                     if (!db.websites[siteName]) {
                         db.websites[siteName] = {
                             name: siteName,
                             totalRequests: 0,
                             successRequests: 0,
+                            errorRequests: 0,
+                            promptTokens: 0,
+                            completionTokens: 0,
+                            totalTokens: 0,
                             totalDuration: 0,
                             lastActive: r.start,
                             endpoints: {},
@@ -529,14 +576,40 @@ async function syncTrafficData() {
 
                     const site = db.websites[siteName];
                     site.totalRequests++;
-                    if (isSuccess) site.successRequests++;
+                    if (isSuccess) {
+                        site.successRequests++;
+                    } else {
+                        site.errorRequests++;
+                    }
+
+                    site.promptTokens += tokens.promptTokens;
+                    site.completionTokens += tokens.completionTokens;
+                    site.totalTokens += tokens.totalTokens;
                     site.totalDuration += durationSec;
+
                     if (new Date(r.start) > new Date(site.lastActive)) {
                         site.lastActive = r.start;
                     }
                     site.endpoints[endpoint] = (site.endpoints[endpoint] || 0) + 1;
                     if (r.remote_addr && !site.clientIps.includes(r.remote_addr)) {
                         site.clientIps.push(r.remote_addr);
+                    }
+
+                    // Lưu vào danh sách audit log gần nhất (giữ tối đa 10 mục)
+                    db.recentAudit.unshift({
+                        id: reqId,
+                        time: r.start,
+                        site: siteName,
+                        method: r.request?.method || 'POST',
+                        uri: endpoint,
+                        status: r.response?.status_code || 0,
+                        duration: durationSec,
+                        promptTokens: tokens.promptTokens,
+                        completionTokens: tokens.completionTokens,
+                        totalTokens: tokens.totalTokens
+                    });
+                    if (db.recentAudit.length > 10) {
+                        db.recentAudit.pop();
                     }
                 }
             });
@@ -550,47 +623,92 @@ async function syncTrafficData() {
     return db;
 }
 
+// Bảng điều khiển giám sát thời gian thực không nháy màn (Flicker-Free Live Monitor)
 async function handleWebUsageStats(rl) {
-    while (true) {
-        console.clear();
-        console.log(`${C.cyan}╔════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}`);
-        console.log(`${C.cyan}║${C.bright}${C.yellow}                  📊 THỐNG KÊ DANH SÁCH WEBSITE ĐANG SỬ DỤNG AI & MỨC ĐỘ                   ${C.reset}${C.cyan}║${C.reset}`);
-        console.log(`${C.cyan}╚════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+    let isRunning = true;
 
+    // Lắng nghe phím bấm: Q, ESC, Enter để thoát; C để reset dữ liệu
+    const onKeypress = (chunk, key) => {
+        if (!key) return;
+        if (key.name === 'q' || key.name === 'escape' || key.name === 'return' || (key.ctrl && key.name === 'c')) {
+            isRunning = false;
+        } else if (key.name === 'c') {
+            resetTrafficDb();
+        }
+    };
+
+    if (process.stdin.isTTY) {
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        process.stdin.on('keypress', onKeypress);
+    }
+
+    // Ẩn con trỏ terminal và xóa màn hình một lần duy nhất lúc khởi động
+    process.stdout.write('\x1b[?25l');
+    console.clear();
+
+    while (isRunning) {
         const db = await syncTrafficData();
         const siteList = Object.values(db.websites);
+        const now = Date.now();
+        const timeStr = new Date().toLocaleTimeString('vi-VN');
+
+        // Tạo buffer màn hình hoàn chỉnh (Single Render Buffer)
+        // Di chuyển con trỏ về góc trên cùng bên trái [H] và ghi đè từng dòng [K]
+        let out = '\x1b[H';
+
+        out += `${C.cyan}╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗${C.reset}\x1b[K\n`;
+        out += `${C.cyan}║${C.bright}${C.yellow}                 🦖 T-REX AI - REAL-TIME WEB USAGE & TOKEN MONITOR (TỰ ĐỘNG CẬP NHẬT 1.0s)                            ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
+        out += `${C.cyan}║${C.dim}                                Nhấn phím [Q] hoặc [ESC] hoặc [Enter] để quay lại Menu                                  ${C.reset}${C.cyan}║${C.reset}\x1b[K\n`;
+        out += `${C.cyan}╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝${C.reset}\x1b[K\n`;
 
         if (siteList.length === 0) {
-            console.log(`${C.yellow}ℹ️ Hiện tại chưa có lượt gọi nào từ các trang web qua Ngrok Tunnel.${C.reset}`);
-            console.log(`💡 Mọi trang web gọi vào AI qua link Ngrok (hoặc Web game Vercel) sẽ tự động hiện tại đây!\n`);
-            return;
+            out += `\n${C.yellow}  ℹ️ Hiện tại chưa ghi nhận yêu cầu truy cập nào qua Ngrok Tunnel.${C.reset}\x1b[K\n`;
+            out += `  💡 Khi bất kỳ website nào (hoặc Web game Vercel) gửi prompt đến AI, dữ liệu sẽ lập tức nhảy tại đây!\x1b[K\n`;
+            out += `\n  ${C.dim}Đang chờ kết nối... (Làm mới lúc: ${timeStr} | Bấm Q để quay lại Menu)${C.reset}\x1b[K\n`;
+            for (let i = 0; i < 15; i++) {
+                out += `\x1b[K\n`;
+            }
+            process.stdout.write(out);
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
         }
 
-        // Tính tổng lượt request toàn hệ thống
+        // Tính toán các chỉ số tổng hợp toàn hệ thống
         const totalAllRequests = siteList.reduce((sum, s) => sum + s.totalRequests, 0);
         const totalSuccess = siteList.reduce((sum, s) => sum + s.successRequests, 0);
+        const totalErrors = siteList.reduce((sum, s) => sum + s.errorRequests, 0);
         const overallSuccessRate = totalAllRequests > 0 ? ((totalSuccess / totalAllRequests) * 100).toFixed(0) : 100;
 
-        // Sắp xếp các website theo mức độ sử dụng (giảm dần)
+        const totalAllTokens = siteList.reduce((sum, s) => sum + s.totalTokens, 0);
+        const totalPromptTokens = siteList.reduce((sum, s) => sum + s.promptTokens, 0);
+        const totalCompletionTokens = siteList.reduce((sum, s) => sum + s.completionTokens, 0);
+
+        const totalDurationAll = siteList.reduce((sum, s) => sum + s.totalDuration, 0);
+        const avgSpeed = totalDurationAll > 0 && totalCompletionTokens > 0 ? (totalCompletionTokens / totalDurationAll).toFixed(1) : '0.0';
+        const avgLatencyAll = totalAllRequests > 0 ? (totalDurationAll / totalAllRequests).toFixed(1) + 's' : '0.0s';
+
+        // Sắp xếp các website theo số lượt requests giảm dần
         siteList.sort((a, b) => b.totalRequests - a.totalRequests);
         const topSite = siteList[0] ? siteList[0].name : 'Chưa có';
 
-        console.log(`${C.bright}📌 TỔNG QUAN HỆ THỐNG:${C.reset}`);
-        console.log(`   • Tổng số Website/Nguồn: ${C.cyan}${C.bright}${siteList.length} trang${C.reset}        • Tổng lượt gọi AI: ${C.green}${C.bright}${totalAllRequests} lượt${C.reset}`);
-        console.log(`   • Website sử dụng nhiều nhất: ${C.yellow}${C.bright}${topSite}${C.reset}`);
-        console.log(`   • Tỷ lệ phản hồi thành công: ${C.green}${C.bright}${overallSuccessRate}%${C.reset}\n`);
+        // Khối KPI Tổng Quan
+        out += `${C.bright}📌 TỔNG QUAN HỆ THỐNG TOÀN CẦU:${C.reset}\x1b[K\n`;
+        out += `   • ${C.bright}Tổng số Website/Client:${C.reset} ${C.cyan}${C.bright}${siteList.length} nguồn${C.reset}             • ${C.bright}Tổng số Requests:${C.reset} ${C.green}${C.bright}${formatNum(totalAllRequests)} reqs${C.reset} (T.Công: ${C.green}${overallSuccessRate}%${C.reset} | Lỗi: ${C.red}${totalErrors}${C.reset})\x1b[K\n`;
+        out += `   • ${C.bright}Tổng Tokens tiêu thụ:${C.reset}    ${C.yellow}${C.bright}${formatNum(totalAllTokens)} Tokens${C.reset}       • ${C.bright}Cấu trúc Tokens:${C.reset}  In: ${C.cyan}${formatNum(totalPromptTokens)}${C.reset} (${totalAllTokens > 0 ? Math.round((totalPromptTokens/totalAllTokens)*100) : 0}%) | Out: ${C.magenta}${formatNum(totalCompletionTokens)}${C.reset} (${totalAllTokens > 0 ? Math.round((totalCompletionTokens/totalAllTokens)*100) : 0}%)\x1b[K\n`;
+        out += `   • ${C.bright}Nguồn dùng nhiều nhất:${C.reset}   ${C.yellow}${C.bright}${topSite}${C.reset}\x1b[K\n`;
+        out += `   • ${C.bright}Tốc độ xử lý AI TB:${C.reset}      ${C.cyan}${avgSpeed} tokens/giây${C.reset}        • ${C.bright}Độ trễ trung bình:${C.reset} ${C.green}${avgLatencyAll}${C.reset} | Live: ${C.green}● ${timeStr}${C.reset}\x1b[K\n`;
+        out += `\x1b[K\n`;
 
-        console.log(`┌────┬──────────────────────────────────────┬────────────────────────┬──────────┬──────────┬───────────┬──────────────┐`);
-        console.log(`│ ${C.bright}STT${C.reset}│ ${C.bright}TÊN WEBSITE / ỨNG DỤNG${C.reset}              │ ${C.bright}MỨC ĐỘ SỬ DỤNG${C.reset}         │ ${C.bright}SỐ LƯỢT${C.reset}  │ ${C.bright}T.CÔNG${C.reset}   │ ${C.bright}ĐỘ TRỄ TB${C.reset} │ ${C.bright}HOẠT ĐỘNG${C.reset}    │`);
-        console.log(`├────┼──────────────────────────────────────┼────────────────────────┼──────────┼──────────┼───────────┼──────────────┤`);
-
-        const now = Date.now();
+        // Bảng chi tiết từng Website
+        out += `┌────┬──────────────────────────────────────┬────────────────────────┬──────────┬────────────────────────────┬──────────┬───────────┬──────────────┐\x1b[K\n`;
+        out += `│ ${C.bright}STT${C.reset}│ ${C.bright}TÊN WEBSITE / NGUỒN TRUY CẬP${C.reset}         │ ${C.bright}MỨC ĐỘ SỬ DỤNG${C.reset}         │ ${C.bright}SỐ REQS${C.reset}  │ ${C.bright}SỐ TOKEN TIÊU THỤ (IN/OUT)${C.reset}  │ ${C.bright}T.CÔNG${C.reset}   │ ${C.bright}ĐỘ TRỄ TB${C.reset} │ ${C.bright}HOẠT ĐỘNG${C.reset}    │\x1b[K\n`;
+        out += `├────┼──────────────────────────────────────┼────────────────────────┼──────────┼────────────────────────────┼──────────┼───────────┼──────────────┤\x1b[K\n`;
 
         siteList.forEach((site, idx) => {
             const percent = totalAllRequests > 0 ? (site.totalRequests / totalAllRequests) * 100 : 0;
             const bar = generateUsageBar(percent);
-            
-            // Phân loại mức độ sử dụng
+
             let levelTag = '';
             let levelColor = C.green;
             if (percent >= 50) {
@@ -607,9 +725,9 @@ async function handleWebUsageStats(rl) {
             const usageMeter = `[${levelColor}${bar}${C.reset}] ${percent.toFixed(1).padStart(5)}% ${levelColor}${levelTag.padEnd(4)}${C.reset}`;
             const successRate = site.totalRequests > 0 ? ((site.successRequests / site.totalRequests) * 100).toFixed(0) + '%' : '100%';
             const avgDur = site.totalRequests > 0 ? (site.totalDuration / site.totalRequests).toFixed(1) + 's' : '0.0s';
-            
+
             const lastTime = new Date(site.lastActive);
-            const isRecent = (now - lastTime.getTime()) < 5 * 60 * 1000; // trong 5 phút gần đây
+            const isRecent = (now - lastTime.getTime()) < 5 * 60 * 1000;
             const activeStatus = isRecent ? `${C.green}🟢 ${lastTime.toLocaleTimeString('vi-VN')}${C.reset}` : `${C.dim}⚪ ${lastTime.toLocaleTimeString('vi-VN')}${C.reset}`;
 
             let displayName = site.name;
@@ -617,28 +735,54 @@ async function handleWebUsageStats(rl) {
                 displayName = displayName.substring(0, 33) + '...';
             }
 
+            // Định dạng chuỗi Tokens (Ví dụ: 1,450 (1.1k/350))
+            const promptK = site.promptTokens >= 1000 ? (site.promptTokens / 1000).toFixed(1) + 'k' : String(site.promptTokens);
+            const compK = site.completionTokens >= 1000 ? (site.completionTokens / 1000).toFixed(1) + 'k' : String(site.completionTokens);
+            const tokenStr = `${formatNum(site.totalTokens)} (${promptK}/${compK})`.padEnd(26);
+
             const sttStr = String(idx + 1).padEnd(2);
             const nameStr = displayName.padEnd(36);
             const reqStr = `${site.totalRequests} reqs`.padEnd(8);
             const succStr = successRate.padEnd(8);
             const durStr = avgDur.padEnd(9);
 
-            console.log(`│ ${sttStr} │ ${C.bright}${nameStr}${C.reset} │ ${usageMeter} │ ${C.cyan}${reqStr}${C.reset} │ ${C.green}${succStr}${C.reset} │ ${durStr} │ ${activeStatus} │`);
+            out += `│ ${sttStr} │ ${C.bright}${nameStr}${C.reset} │ ${usageMeter} │ ${C.cyan}${reqStr}${C.reset} │ ${C.yellow}${tokenStr}${C.reset} │ ${C.green}${succStr}${C.reset} │ ${durStr} │ ${activeStatus} │\x1b[K\n`;
         });
 
-        console.log(`└────┴──────────────────────────────────────┴────────────────────────┴──────────┴──────────┴───────────┴──────────────┘\n`);
+        out += `└────┴──────────────────────────────────────┴────────────────────────┴──────────┴────────────────────────────┴──────────┴───────────┴──────────────┘\x1b[K\n`;
 
-        console.log(`💡 ${C.dim}Giải thích mức độ: [██████████] là thanh đo phần trăm lưu lượng website đó chiếm trên tổng lượt gọi AI.${C.reset}`);
-        console.log(`💡 ${C.dim}Trạng thái: 🟢 Đang gọi trong 5 phút gần nhất | ⚪ Đã nghỉ${C.reset}\n`);
-
-        const ans = await new Promise((resolve) => {
-            rl.question(`👉 Nhấn ${C.yellow}[R]${C.reset} để Làm mới dữ liệu | Nhấn ${C.green}[Enter]${C.reset} để Quay lại Menu chính: `, resolve);
-        });
-
-        if (ans.trim().toLowerCase() !== 'r') {
-            break;
+        // Live Audit Log: 4 Request gần đây nhất
+        out += `${C.bright}📡 NHẬT KÝ 4 YÊU CẦU MỚI NHẤT (LIVE AUDIT FEED):${C.reset}\x1b[K\n`;
+        if (db.recentAudit && db.recentAudit.length > 0) {
+            db.recentAudit.slice(0, 4).forEach(r => {
+                const time = new Date(r.time).toLocaleTimeString('vi-VN');
+                const site = r.site.length > 25 ? r.site.substring(0, 22) + '...' : r.site.padEnd(25);
+                const statusStr = r.status === 200 ? `${C.green}200 OK${C.reset}` : `${C.red}${r.status || 'ERR'}${C.reset}`;
+                const dur = r.duration.toFixed(2) + 's';
+                const tokenStr = r.totalTokens > 0 ? `${C.yellow}${r.totalTokens} Tokens${C.reset} (In: ${r.promptTokens}, Out: ${r.completionTokens})` : `${C.dim}0 Tokens${C.reset}`;
+                out += `   • ${C.dim}${time}${C.reset} │ ${C.cyan}${site}${C.reset} │ ${r.method.padEnd(4)} ${r.uri.padEnd(12)} │ ${statusStr} │ ${tokenStr.padEnd(35)} │ ${dur}\x1b[K\n`;
+            });
+        } else {
+            out += `   ${C.dim}Chưa có dữ liệu nhật ký mới.${C.reset}\x1b[K\n`;
         }
+
+        out += `\x1b[K\n`;
+        out += `💡 ${C.dim}Phím điều khiển: [Q] hoặc [ESC] hoặc [Enter] để Quay lại Menu | [C] Xóa sạch dữ liệu thống kê${C.reset}\x1b[K\n`;
+        out += `💡 ${C.dim}Màn hình cập nhật liên tục 1.0 giây hoàn toàn không nháy màn (Flicker-Free In-Place Rendering).${C.reset}\x1b[K\n`;
+
+        // Ghi toàn bộ buffer ra terminal một lần duy nhất
+        process.stdout.write(out);
+
+        // Chờ 1 giây cho chu kỳ cập nhật tiếp theo
+        await new Promise(r => setTimeout(r, 1000));
     }
+
+    // Khôi phục lại trạng thái terminal khi thoát
+    if (process.stdin.isTTY) {
+        process.stdin.removeListener('keypress', onKeypress);
+        process.stdin.setRawMode(false);
+    }
+    process.stdout.write('\x1b[?25h');
 }
 
 // -------------------------------------------------------------
@@ -680,7 +824,7 @@ async function main() {
         console.log(`  ${C.cyan}[2]${C.reset} 🌐 ${C.bright}Khởi động Ngrok${C.reset} (Mở cổng ra Internet với Host Header)`);
         console.log(`  ${C.cyan}[3]${C.reset} 📊 ${C.bright}Bảng thống kê AI thời gian thực${C.reset} (Live Monitor tự làm mới)`);
         console.log(`  ${C.cyan}[4]${C.reset} 📋 ${C.bright}Xuất API kết nối AI${C.reset} (Code mẫu gọi từ mọi Web)`);
-        console.log(`  ${C.cyan}[5]${C.reset} 📈 ${C.bright}Website đang dùng AI & Mức độ sử dụng${C.reset} (Traffic Monitor)`);
+        console.log(`  ${C.cyan}[5]${C.reset} 📈 ${C.bright}Website đang dùng AI, Số Reqs & Tokens${C.reset} (Live Monitor Không Nháy)`);
         console.log(`  ${C.cyan}[6]${C.reset} ❌ ${C.bright}Thoát${C.reset}`);
         console.log(`${C.dim}────────────────────────────────────────────────────────────────────────────────${C.reset}`);
 

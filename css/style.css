@@ -1403,6 +1403,82 @@ body.night-theme .quick-prompt-btn:hover {
     to { transform: rotate(360deg); }
 }
 
+/* Settings Panel for Vercel Tunnel */
+.ai-settings-panel {
+    display: none;
+    background: var(--panel-bg);
+    border-bottom: 2px solid var(--border-color);
+    padding: 12px 16px;
+    animation: fadeIn 0.2s ease;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.ai-settings-panel.open {
+    display: block;
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.close-settings-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.settings-desc {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.settings-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.settings-input-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.ai-tunnel-input {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-size: 12px;
+    outline: none;
+}
+
+.ai-tunnel-input:focus {
+    border-color: #1a73e8;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.settings-tip {
+    font-size: 10.5px;
+    color: var(--text-muted);
+}
+
 /* Responsive Mobile Chat */
 @media (max-width: 480px) {
     .ai-chat-fab {

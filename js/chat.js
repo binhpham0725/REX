@@ -84,8 +84,31 @@
                         <span class="mode-icon">⚡</span>
                         <span class="mode-text">Nhanh</span>
                     </button>
+                    <button id="aiSettingsBtn" class="ai-icon-btn" title="Cài đặt kết nối AI (Vercel Cloud / Ngrok Tunnel)">⚙️</button>
                     <button id="aiClearBtn" class="ai-icon-btn" title="Xóa lịch sử trò chuyện">🗑️</button>
                     <button id="aiCloseBtn" class="ai-icon-btn" title="Đóng khung chat">✕</button>
+                </div>
+            </div>
+
+            <!-- Panel Cài đặt kết nối cho Vercel Cloud -->
+            <div class="ai-settings-panel" id="aiSettingsPanel">
+                <div class="settings-header">
+                    <strong>⚙️ KẾT NỐI AI CHO VERCEL</strong>
+                    <button id="aiCloseSettingsBtn" class="close-settings-btn">✕</button>
+                </div>
+                <p class="settings-desc">
+                    Khi host trên <strong>Vercel</strong>, website nằm trên Cloud nên cần đường dẫn Tunnel để kết nối với Ollama trong máy tính của bạn:
+                </p>
+                <div class="settings-input-group">
+                    <label>Link Ngrok / Cloudflare Tunnel:</label>
+                    <input type="url" id="aiTunnelInput" class="ai-tunnel-input" placeholder="https://xxxx.ngrok-free.app" spellcheck="false">
+                </div>
+                <div class="settings-actions">
+                    <button id="aiSaveTunnelBtn" class="btn btn-sm primary">💾 Lưu Link</button>
+                    <button id="aiResetTunnelBtn" class="btn btn-sm">↺ Đặt lại</button>
+                </div>
+                <div class="settings-tip">
+                    💡 <em>Lệnh chạy trên máy: <code>ngrok http 11434</code></em>
                 </div>
             </div>
 
@@ -158,6 +181,53 @@
         if (openBarBtn) {
             openBarBtn.addEventListener('click', () => {
                 if (!chatState.isOpen) toggleChat();
+            });
+        }
+
+        // Bật/Tắt Cài đặt kết nối Tunnel Vercel
+        const settingsBtn = document.getElementById('aiSettingsBtn');
+        const settingsPanel = document.getElementById('aiSettingsPanel');
+        const closeSettingsBtn = document.getElementById('aiCloseSettingsBtn');
+        const tunnelInput = document.getElementById('aiTunnelInput');
+        const saveTunnelBtn = document.getElementById('aiSaveTunnelBtn');
+        const resetTunnelBtn = document.getElementById('aiResetTunnelBtn');
+
+        if (tunnelInput) {
+            tunnelInput.value = localStorage.getItem('rex_ollama_tunnel') || '';
+        }
+
+        if (settingsBtn && settingsPanel) {
+            settingsBtn.addEventListener('click', () => {
+                settingsPanel.classList.toggle('open');
+            });
+            if (closeSettingsBtn) {
+                closeSettingsBtn.addEventListener('click', () => {
+                    settingsPanel.classList.remove('open');
+                });
+            }
+        }
+
+        if (saveTunnelBtn && tunnelInput) {
+            saveTunnelBtn.addEventListener('click', () => {
+                const val = tunnelInput.value.trim().replace(/\/+$/, '');
+                if (val) {
+                    localStorage.setItem('rex_ollama_tunnel', val);
+                    appendSystemNotice(`🔗 Đã lưu đường dẫn Tunnel: <strong>${val}</strong>`);
+                } else {
+                    localStorage.removeItem('rex_ollama_tunnel');
+                }
+                settingsPanel.classList.remove('open');
+                fetchModels();
+            });
+        }
+
+        if (resetTunnelBtn && tunnelInput) {
+            resetTunnelBtn.addEventListener('click', () => {
+                localStorage.removeItem('rex_ollama_tunnel');
+                tunnelInput.value = '';
+                appendSystemNotice('↺ Đã đặt lại về kết nối cục bộ mặc định.');
+                settingsPanel.classList.remove('open');
+                fetchModels();
             });
         }
 
@@ -248,7 +318,11 @@
         const statusBadge = document.getElementById('aiStatusBadge');
 
         try {
-            const res = await fetch(getApiEndpoint('/api/ai/models'));
+            const tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || '';
+            const headers = {};
+            if (tunnelUrl) headers['x-ollama-url'] = tunnelUrl;
+
+            const res = await fetch(getApiEndpoint('/api/ai/models'), { headers });
             const data = await res.json();
 
             if (data.success && Array.isArray(data.models) && data.models.length > 0) {
@@ -341,13 +415,18 @@
 
         try {
             const apiUrl = getApiEndpoint('/api/ai/chat');
+            const tunnelUrl = localStorage.getItem('rex_ollama_tunnel') || '';
+            const headers = { 'Content-Type': 'application/json' };
+            if (tunnelUrl) headers['x-ollama-url'] = tunnelUrl;
+
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify({
                     model: chatState.selectedModel,
                     messages: chatState.messages,
-                    think: chatState.think
+                    think: chatState.think,
+                    ollamaUrl: tunnelUrl
                 })
             });
 

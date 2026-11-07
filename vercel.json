@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/ai/chat",
+      "destination": "/api/ai/chat.js"
+    },
+    {
+      "source": "/api/ai/models",
+      "destination": "/api/ai/models.js"
+    },
+    {
+      "source": "/api/scores",
+      "destination": "/api/scores.js"
+    },
+    {
+      "source": "/api/player/rename",
+      "destination": "/api/scores.js"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version" }
+      ]
+    }
+  ]
+}

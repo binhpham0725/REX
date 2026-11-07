@@ -30,13 +30,13 @@
         fetchModels();
     }
 
-    // 0. Xác định địa chỉ API Server thông minh (hỗ trợ cả khi mở bằng file://, cổng khác, hoặc GitHub Pages)
+    // 0. Xác định địa chỉ API Server thông minh
     function getApiEndpoint(endpointPath) {
-        // Nếu trang web đang chạy trên đúng server Node.js (cổng 8080)
-        if (window.location.protocol.startsWith('http') && window.location.port === '8080') {
-            return endpointPath;
+        // Nếu trang web đang chạy trên bất kỳ HTTP/HTTPS host nào (Vercel, Localhost, IP mạng LAN...)
+        if (window.location.protocol.startsWith('http')) {
+            return endpointPath; // LUÔN DÙNG ĐƯỜNG DẪN TƯƠNG ĐỐI TRÊN CÙNG DOMAIN
         }
-        // Nếu mở từ file://, cổng 8000, 5500 (Live Server) hoặc GitHub Pages: Trỏ về server Node.js cục bộ
+        // Chỉ khi mở bằng file:// cục bộ (double-click index.html offline không qua server)
         return 'http://localhost:8080' + endpointPath;
     }
 
@@ -345,9 +345,9 @@
                 }
 
                 statusIndicator.className = 'ai-status-indicator online';
-                statusIndicator.textContent = '● Online (Ollama)';
+                statusIndicator.textContent = data.isVercel ? '● Online (Vercel)' : '● Online (Ollama)';
                 statusBadge.className = 'fab-badge online';
-                statusBadge.title = 'AI Local đã sẵn sàng!';
+                statusBadge.title = 'AI đã sẵn sàng trò chuyện!';
             } else {
                 markOffline(data.error || 'Không tìm thấy model nào');
             }

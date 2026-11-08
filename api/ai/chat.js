@@ -1,6 +1,6 @@
 /**
  * API duy nhất kết nối trực tiếp 100% với Ollama
- * Nhận tin nhắn từ Web -> Gọi Ollama -> Trả về câu trả lời thực tế từ Ollama
+ * Nhận tin nhắn từ Web -> Gọi Ollama -> Trả vềEcâu trả lời thực tế từ Ollama
  */
 
 import fs from 'fs';
@@ -20,7 +20,7 @@ function getDefaultOllamaUrl() {
             if (savedUrl && savedUrl.startsWith('https://')) return savedUrl;
         }
     } catch (e) {}
-    return process.env.OLLAMA_URL || 'https://e341-116-99-254-229.ngrok-free.app';
+    return process.env.OLLAMA_URL || 'https://f1ba-2402-800-61fb-d9e1-dcda-61a5-2dc2-827.ngrok-free.app';
 }
 const DEFAULT_OLLAMA_URL = getDefaultOllamaUrl();
 
@@ -133,15 +133,15 @@ export default async function handler(req, res) {
             clientWebsite = host ? `https://${host}` : 'Web Game Vercel';
         }
 
-        // 1. KIỂM TRA QUYỀN TRUY CẬP (ACCESS CONTROL - CHỨC NĂNG 6)
+        // 1. KIềE TRA QUYỀN TRUY CẬP (ACCESS CONTROL - CHỨC NāEG 6)
         const accessStatus = getAccessStatus(clientWebsite);
         if (accessStatus === 'blocked') {
-            res.write(`data: ${JSON.stringify({ error: `🚫 Nguồn "${clientWebsite}" đã bị quản trị viên chặn quyền gọi AI trong Controller (Chức năng 6).` })}\n\n`);
+            res.write(`data: ${JSON.stringify({ error: `🚫 Nguồn "${clientWebsite}" đã bềEquản trềEviên chặn quyền gọi AI trong Controller (Chức năng 6).` })}\n\n`);
             res.write(`data: [DONE]\n\n`);
             return res.end();
         }
 
-        // 2. KIỂM TRA ROUTER CACHE CÂU HỎI THƯỜNG GẶP (CHỨC NĂNG 10)
+        // 2. KIềE TRA ROUTER CACHE CÂU HỎI THƯỜNG GẶP (CHỨC NāEG 10)
         const lastUserMsg = [...rawMessages].reverse().find(m => m.role === 'user');
         const userText = lastUserMsg ? lastUserMsg.content : '';
         const cachedAnswer = lookupRouterCache(userText);
@@ -163,14 +163,14 @@ export default async function handler(req, res) {
             return res.end();
         }
 
-        // 3. ÁP DỤNG RULE / CHỈ THỊ HỆ THỐNG ĐANG KÍCH HOẠT (CHỨC NĂNG 8)
+        // 3. ÁP DỤNG RULE / CHềETHềEHềETHỐNG ĐANG KÍCH HOẠT (CHỨC NāEG 8)
         const activePrompt = getActiveSystemPrompt();
         const systemPromptText = activePrompt || 'Bạn là T-Rex AI - một chú khủng long vui nhộn, thông minh tích hợp trên web game T-Rex Runner. Hãy trả lời ngắn gọn, thân thiện bằng tiếng Việt, đi thẳng vào câu hỏi.';
         const systemMsg = { role: 'system', content: systemPromptText };
         const chatHistory = rawMessages.filter(m => m.role !== 'system').slice(-4);
         const messagesToSend = [systemMsg, ...chatHistory];
 
-        // Lấy địa chỉ Ollama
+        // Lấy địa chềEOllama
         const ollamaBaseUrl = req.headers['x-ollama-url'] || payload.ollamaUrl || DEFAULT_OLLAMA_URL;
 
         // Gửi trực tiếp đến Ollama API
@@ -178,7 +178,7 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': '1', // Bỏ qua trang cảnh báo của ngrok
+                'ngrok-skip-browser-warning': '1', // BềEqua trang cảnh báo của ngrok
                 'X-Client-Origin': clientWebsite,
                 'Referer': clientWebsite
             },
@@ -187,7 +187,7 @@ export default async function handler(req, res) {
                 messages: messagesToSend,
                 stream: true,
                 think: think,
-                keep_alive: -1, // Luôn giữ model trong VRAM vĩnh viễn, không bị nguội gây chậm/timeout
+                keep_alive: -1, // Luôn giữ model trong VRAM vĩnh viềE, không bềEnguội gây chậm/timeout
                 options: {
                     num_predict: 384,
                     temperature: 0.7

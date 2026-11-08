@@ -31,7 +31,7 @@
         fetchModels();
     }
 
-    const DEFAULT_NGROK_URL = 'https://43e9-116-99-255-211.ngrok-free.app';
+    const DEFAULT_NGROK_URL = 'https://e341-116-99-254-229.ngrok-free.app';
 
     // Tự động đồng bộ link Tunnel Ngrok mới nhất từ Backend (chống lỗi khi Ngrok khởi động lại)
     async function syncTunnelFromServer(force = false) {
@@ -125,7 +125,7 @@
                 </div>
                 <div class="settings-input-group">
                     <label>Link Ngrok Ollama:</label>
-                    <input type="url" id="aiTunnelInput" class="ai-tunnel-input" placeholder="https://43e9-116-99-255-211.ngrok-free.app" spellcheck="false">
+                    <input type="url" id="aiTunnelInput" class="ai-tunnel-input" placeholder="https://e341-116-99-254-229.ngrok-free.app" spellcheck="false">
                     <span style="font-size:10px; color:var(--text-muted); margin-top:3px;">Lệnh bật trên máy: <code>ngrok http 11434 --host-header=localhost:11434</code></span>
                 </div>
                 <div class="settings-actions" style="margin-top:8px;">

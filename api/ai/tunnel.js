@@ -26,6 +26,6 @@ export default function handler(req, res) {
 
     return res.status(200).json({
         success: true,
-        url: process.env.OLLAMA_URL || 'https://43e9-116-99-255-211.ngrok-free.app'
+        url: process.env.OLLAMA_URL || 'https://e341-116-99-254-229.ngrok-free.app'
     });
 }

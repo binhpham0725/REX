@@ -31,7 +31,7 @@
         fetchModels();
     }
 
-    const DEFAULT_NGROK_URL = 'https://8d3e-2402-800-611a-8b7d-f158-a935-d8ca-72bb.ngrok-free.app';
+    const DEFAULT_NGROK_URL = 'https://5a6b-2402-800-611a-8b7d-517c-82c5-4674-e70b.ngrok-free.app';
 
     // Tự động đồng bềElink Tunnel Ngrok mới nhất từ Backend (chống lỗi khi Ngrok khởi động lại)
     async function syncTunnelFromServer(force = false) {
@@ -125,7 +125,7 @@
                 </div>
                 <div class="settings-input-group">
                     <label>Link Ngrok Ollama:</label>
-                    <input type="url" id="aiTunnelInput" class="ai-tunnel-input" placeholder="https://8d3e-2402-800-611a-8b7d-f158-a935-d8ca-72bb.ngrok-free.app" spellcheck="false">
+                    <input type="url" id="aiTunnelInput" class="ai-tunnel-input" placeholder="https://5a6b-2402-800-611a-8b7d-517c-82c5-4674-e70b.ngrok-free.app" spellcheck="false">
                     <span style="font-size:10px; color:var(--text-muted); margin-top:3px;">Lệnh bật trên máy: <code>ngrok http 11434 --host-header=localhost:11434</code></span>
                 </div>
                 <div class="settings-actions" style="margin-top:8px;">

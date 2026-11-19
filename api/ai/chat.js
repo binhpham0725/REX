@@ -20,7 +20,7 @@ function getDefaultOllamaUrl() {
             if (savedUrl && savedUrl.startsWith('https://')) return savedUrl;
         }
     } catch (e) {}
-    return process.env.OLLAMA_URL || 'https://71c7-2a09-bac1-7ac0-48-00-498-3c.ngrok-free.app';
+    return process.env.OLLAMA_URL || 'https://92a7-2a09-bac5-d45c-e6-00-17-32c.ngrok-free.app';
 }
 const DEFAULT_OLLAMA_URL = getDefaultOllamaUrl();
 
